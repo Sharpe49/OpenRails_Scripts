@@ -23,14 +23,25 @@ namespace ORTS.Scripting.Script
 {
     public class TCS_France : TrainControlSystem
     {
-        enum CCS {
+        enum CCS
+        {
             KVB,
             TVM300,
             TVM430,
             ETCS
         }
 
+        enum ETCSLevel
+        {
+            L0,
+            NTC,
+            L1,
+            L2,
+            L3
+        }
+
         CCS ActiveCCS;
+        ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
         // Constants
         float GravityNpKg = 9.80665f;                       // g
@@ -38,8 +49,10 @@ namespace ORTS.Scripting.Script
         // Train parameters
         bool TVM300Present = true;                          // TVM300
         bool TVM430Present = false;                         // TVM430 (Not implemented)
+        bool ETCSPresent = false;                           // ETCS (Not implemented)
+        ETCSLevel ETCSMaxLevel = ETCSLevel.L0;              // ETCS maximum level (Not implemented)
         bool ElectroPneumaticBrake = true;                  // EP
-        bool HeavyFreightTrain = false;
+        bool HeavyFreightTrain = false;                     // MA train, speed < 100 km/h
         float TrainLengthM = 400f;                          // L
         float MaxSpeedLimitMpS = MpS.FromKpH(320);          // VT
         float BrakingEstablishedDelayS = 2f;                // Tbo
