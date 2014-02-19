@@ -58,6 +58,9 @@ namespace ORTS.Scripting.Script
         float BrakingEstablishedDelayS = 2f;                // Tbo
         float DecelerationMpS2 = 0.9f;                      // Gamma
 
+        // RSO (Optical Signal Repetition)
+        // Not implemented
+
         // KVB speed control
         float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
         float KVBTrainSpeedLimitMpS = MpS.FromKpH(220);     // VT
@@ -89,6 +92,9 @@ namespace ORTS.Scripting.Script
         float TVM300NextSpeedLimitMpS;
         float TVM300EmergencySpeedMpS;
         bool TVM300EmergencyBraking;
+
+        // TVM430 COVIT speed control
+        // Not implemented
 
         // Vigilance monitoring (VACMA)
         bool VigilanceAlarm = false;
@@ -175,6 +181,10 @@ namespace ORTS.Scripting.Script
 
             SetThrottleController(0.0f); // Necessary while second locomotive isn't switched off during EB.
             SetPantographsDown();
+        }
+
+        protected void UpdateRSO()
+        {
         }
 
         protected void UpdateKVB()
@@ -386,6 +396,10 @@ namespace ORTS.Scripting.Script
                 TVM300EmergencyBraking = false;
                 SetPenaltyApplicationDisplay(false);
             }
+        }
+
+        protected void UpdateTVM430()
+        {
         }
 
         public override void AlerterReset()
