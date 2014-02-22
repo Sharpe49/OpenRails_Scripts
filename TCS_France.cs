@@ -16,7 +16,7 @@
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
 using System;
-using ORTS;
+using ORTS.Common;
 using ORTS.Scripting.Api;
 
 namespace ORTS.Scripting.Script
@@ -52,7 +52,7 @@ namespace ORTS.Scripting.Script
         bool ETCSPresent = false;                           // ETCS (Not implemented)
         ETCSLevel ETCSMaxLevel = ETCSLevel.L0;              // ETCS maximum level (Not implemented)
         bool ElectroPneumaticBrake = true;                  // EP
-        bool HeavyFreightTrain = false;                     // MA train, speed < 100 km/h
+        bool HeavyFreightTrain = false;                     // MA train only
         float TrainLengthM = 400f;                          // L
         float MaxSpeedLimitMpS = MpS.FromKpH(320);          // VT
         float BrakingEstablishedDelayS = 2f;                // Tbo
@@ -107,7 +107,7 @@ namespace ORTS.Scripting.Script
             if (!ElectroPneumaticBrake)
                 BrakingEstablishedDelayS = 2f + 2f * (float)Math.Pow((double)TrainLengthM, 2D) * 0.00001f;
             else if (HeavyFreightTrain)
-                BrakingEstablishedDelayS = 12f + TrainLenghtM / 200f;
+                BrakingEstablishedDelayS = 12f + TrainLengthM / 200f;
 
             KVBPreviousSignalDistanceM = 0f;
             KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
