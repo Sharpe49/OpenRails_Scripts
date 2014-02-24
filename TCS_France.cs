@@ -1,4 +1,4 @@
-// COPYRIGHT 2014 by the Open Rails project.
+ // COPYRIGHT 2014 by the Open Rails project.
 // 
 // This file is part of Open Rails.
 // 
@@ -25,19 +25,21 @@ namespace ORTS.Scripting.Script
     {
         enum CCS
         {
-            KVB,
-            TVM300,
-            TVM430,
-            ETCS
+            RSO,        // RSO only
+            DAAT,       // RSO + DAAT
+            KVB,        // RSO + KVB
+            TVM300,     // RSO partially inhibited + TVM300
+            TVM430,     // RSO partially inhibited + TVM430
+            ETCS        // ETCS only
         }
 
         enum ETCSLevel
         {
-            L0,
-            NTC,
-            L1,
-            L2,
-            L3
+            L0,         // Unfitted (national system active)
+            NTC,        // Specific Transmission Module (national system information transmitted to ETCS)
+            L1,         // Level 1 : Beacon transmission, loop transmission and radio in-fill
+            L2,         // Level 2 : Radio transmission, beacon positionning
+            L3          // Level 3 : Same as level 2 + moving block
         }
 
         CCS ActiveCCS;
@@ -47,6 +49,8 @@ namespace ORTS.Scripting.Script
         float GravityNpKg = 9.80665f;                       // g
 
         // Train parameters
+        bool DAATPresent = false;                           // DAAT
+        bool KVBPresent = true;                             // KVB
         bool TVM300Present = true;                          // TVM300
         bool TVM430Present = false;                         // TVM430 (Not implemented)
         bool ETCSPresent = false;                           // ETCS (Not implemented)
@@ -58,10 +62,17 @@ namespace ORTS.Scripting.Script
         float BrakingEstablishedDelayS = 2f;                // Tbo
         float DecelerationMpS2 = 0.9f;                      // Gamma
 
-        // RSO (Optical Signal Repetition)
+        // RSO (Répétition Optique des Signaux / Optical Signal Repetition)
+        float RSOEmergencyBrakeDelay = 4f;
+        bool RSOType1Inhibition = false;                    // Inhibition 1 : Reverse
+        bool RSOType2Inhibition = false;                    // Inhibition 2 : KVB not inhibited and train on HSL
+        bool RSOType3Inhibition = false;                    // Inhibition 3 : TVM COVIT not inhibited
+
+        // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
         // Not implemented
 
-        // KVB speed control
+        // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
+        bool KVBInhibited = false;
         float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
         float KVBTrainSpeedLimitMpS = MpS.FromKpH(220);     // VT
 
@@ -84,10 +95,10 @@ namespace ORTS.Scripting.Script
         float KVBSpeedPostEmergencySpeedCurveMpS;
         float KVBSpeedPostAlertSpeedCurveMpS;
 
-        bool Overspeed = false;
         bool KVBEmergencyBraking = false;
 
         // TVM300 COVIT speed control
+        bool TVMCOVITInhibited = false;
         float TVM300CurrentSpeedLimitMpS;
         float TVM300NextSpeedLimitMpS;
         float TVM300EmergencySpeedMpS;
@@ -130,24 +141,25 @@ namespace ORTS.Scripting.Script
         {
             SetNextSignalAspect(NextSignalAspect(0));
 
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f))
+            if (!KVBPresent && !DAATPresent)
+            {
+                ActiveCCS = CCS.RSO;
+
+                UpdateVACMA();
+            }
+            else if (!KVBPresent && DAATPresent)
+            {
+                ActiveCCS = CCS.DAAT;
+
+                UpdateVACMA();
+            }
+            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
             {
                 // Classic line = KVB active
                 ActiveCCS = CCS.KVB;
 
                 UpdateKVB();
                 UpdateVACMA();
-
-                if (KVBEmergencyBraking)
-                {
-                    if (SpeedMpS() >= 0.1f)
-                        SetEmergency();
-                    else
-                    {
-                        KVBEmergencyBraking = false;
-                        SetPenaltyApplicationDisplay(false);
-                    }
-                }
             }
             else
             {
@@ -246,7 +258,7 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVBSpeedCurve()
         {
-            Overspeed = false;
+            bool Overspeed = false;
 
             KVBSignalEmergencySpeedCurveMpS =
                 Math.Min( 
@@ -370,6 +382,17 @@ namespace ORTS.Scripting.Script
             }
 
             SetOverspeedWarningDisplay(Overspeed);
+
+            if (KVBEmergencyBraking)
+            {
+                if (SpeedMpS() >= 0.1f)
+                    SetEmergency();
+                else
+                {
+                    KVBEmergencyBraking = false;
+                    SetPenaltyApplicationDisplay(false);
+                }
+            }
         }
 
         protected void UpdateTVM300()
