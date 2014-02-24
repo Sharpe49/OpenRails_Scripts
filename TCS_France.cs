@@ -73,6 +73,10 @@ namespace ORTS.Scripting.Script
 
         // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
         bool KVBInhibited = false;
+        bool KVBPreviousOverspeed = false;
+        bool KVBEmergencyBraking = false;
+        bool KVBPreviousEmergencyBraking = false;
+
         float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
         float KVBTrainSpeedLimitMpS = MpS.FromKpH(220);     // VT
 
@@ -94,8 +98,6 @@ namespace ORTS.Scripting.Script
         float KVBSignalAlertSpeedCurveMpS;
         float KVBSpeedPostEmergencySpeedCurveMpS;
         float KVBSpeedPostAlertSpeedCurveMpS;
-
-        bool KVBEmergencyBraking = false;
 
         // TVM300 COVIT speed control
         bool TVMCOVITInhibited = false;
@@ -258,8 +260,8 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVBSpeedCurve()
         {
-            bool Overspeed = false;
-
+            bool KVBOverspeed = false;
+            
             KVBSignalEmergencySpeedCurveMpS =
                 Math.Min( 
                     Math.Min(
@@ -359,7 +361,7 @@ namespace ORTS.Scripting.Script
 
             if (SpeedMpS() > KVBSignalAlertSpeedCurveMpS)
             {
-                Overspeed = true;
+                KVBOverspeed = true;
 
                 if (SpeedMpS() > KVBSignalEmergencySpeedCurveMpS)
                 {
@@ -371,7 +373,7 @@ namespace ORTS.Scripting.Script
 
             if (SpeedMpS() > KVBSpeedPostAlertSpeedCurveMpS)
             {
-                Overspeed = true;
+                KVBOverspeed = true;
 
                 if (SpeedMpS() > KVBSpeedPostEmergencySpeedCurveMpS)
                 {
@@ -381,7 +383,14 @@ namespace ORTS.Scripting.Script
                 }
             }
 
-            SetOverspeedWarningDisplay(Overspeed);
+            SetOverspeedWarningDisplay(KVBOverspeed);
+            if (KVBOverspeed == true && KVBPreviousOverspeed == false)
+                TriggerSoundPenalty1();
+            KVBPreviousOverspeed = KVBOverspeed;
+
+            if (KVBEmergencyBraking == true && KVBPreviousEmergencyBraking == false)
+                TriggerSoundPenalty2();
+            KVBPreviousEmergencyBraking = KVBEmergencyBraking;
 
             if (KVBEmergencyBraking)
             {
