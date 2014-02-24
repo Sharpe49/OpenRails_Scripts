@@ -73,12 +73,12 @@ namespace ORTS.Scripting.Script
 
         // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
         bool KVBInhibited = false;
+        float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
+        float KVBTrainSpeedLimitMpS = MpS.FromKpH(220f);     // VT
+
         bool KVBPreviousOverspeed = false;
         bool KVBEmergencyBraking = false;
         bool KVBPreviousEmergencyBraking = false;
-
-        float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
-        float KVBTrainSpeedLimitMpS = MpS.FromKpH(220);     // VT
 
         float KVBPreviousSignalDistanceM;                   // D
         float KVBCurrentSignalSpeedLimitMpS;
@@ -99,14 +99,16 @@ namespace ORTS.Scripting.Script
         float KVBSpeedPostEmergencySpeedCurveMpS;
         float KVBSpeedPostAlertSpeedCurveMpS;
 
-        // TVM300 COVIT speed control
+        // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
         bool TVMCOVITInhibited = false;
+        float TVM300TrainSpeedLimitMpS = MpS.FromKpH(300f);
+
         float TVM300CurrentSpeedLimitMpS;
         float TVM300NextSpeedLimitMpS;
         float TVM300EmergencySpeedMpS;
         bool TVM300EmergencyBraking;
 
-        // TVM430 COVIT speed control
+        // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
         // Not implemented
 
         // Vigilance monitoring (VACMA)
@@ -408,9 +410,15 @@ namespace ORTS.Scripting.Script
         {
             TVM300NextSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
             TVM300CurrentSpeedLimitMpS = CurrentSignalSpeedLimitMpS();
-            if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80))
+
+            if (TVM300CurrentSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
+                TVM300CurrentSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
+
+            if (TVM300CurrentSpeedLimitMpS < 0f)
+                TVM300EmergencySpeedMpS = TVM300CurrentSpeedLimitMpS = TVM300NextSpeedLimitMpS;
+            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(5f);
-            if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(170))
+            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(170f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(10f);
             else
                 TVM300EmergencySpeedMpS = MpS.FromKpH(15f);
