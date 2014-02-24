@@ -1,4 +1,4 @@
- // COPYRIGHT 2014 by the Open Rails project.
+// COPYRIGHT 2014 by the Open Rails project.
 // 
 // This file is part of Open Rails.
 // 
@@ -42,7 +42,7 @@ namespace ORTS.Scripting.Script
             L3          // Level 3 : Same as level 2 + moving block
         }
 
-        CCS ActiveCCS;
+        CCS ActiveCCS = CCS.RSO;
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
         // Constants
