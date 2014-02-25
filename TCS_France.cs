@@ -45,9 +45,6 @@ namespace ORTS.Scripting.Script
         CCS ActiveCCS = CCS.RSO;
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
-        // Constants
-        float GravityNpKg = 9.80665f;                       // g
-
         // Train parameters
         bool DAATPresent = false;                           // DAAT
         bool KVBPresent = true;                             // KVB
@@ -268,16 +265,13 @@ namespace ORTS.Scripting.Script
                 Math.Min( 
                     Math.Min(
                         Math.Max(
-                            (float)Math.Sqrt(
-                                Math.Pow((double)(BrakingEstablishedDelayS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)BrakingEstablishedDelayS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)BrakingEstablishedDelayS * (double)(GravityNpKg * KVBDeclivity), 2D)
-                                + 2D * (double)(KVBSignalTargetDistanceM * DecelerationMpS2)
-                                - 2D * (double)(KVBSignalTargetDistanceM * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)KVBSignalTargetSpeedMpS, 2D)
-                            )
-                            - BrakingEstablishedDelayS * DecelerationMpS2
-                            + BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity,
+                            SpeedCurve(
+                                KVBSignalTargetDistanceM,
+                                KVBSignalTargetSpeedMpS,
+                                KVBDeclivity,
+                                BrakingEstablishedDelayS,
+                                DecelerationMpS2
+                            ),
                             KVBNextSignalSpeedLimitMpS + KVBEBSpeedMpS
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(10f)
@@ -288,24 +282,13 @@ namespace ORTS.Scripting.Script
                 Math.Min(
                     Math.Min(
                         Math.Max(
-                            (float)Math.Sqrt(
-                                Math.Pow((double)(BrakingEstablishedDelayS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)BrakingEstablishedDelayS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + 2D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS) * Math.Pow((double)DecelerationMpS2, 2D)
-                                - 4D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)(BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity), 2D)
-                                + 2D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS) * Math.Pow((double)(GravityNpKg * KVBDeclivity), 2D)
-                                + Math.Pow((double)(KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)KVBEmergencyBrakingAnticipationTimeS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)(KVBEmergencyBrakingAnticipationTimeS * GravityNpKg * KVBDeclivity), 2D)
-                                + Math.Pow((double)KVBSignalTargetSpeedMpS, 2D)
-                                + 2D * (double)(KVBSignalTargetDistanceM * DecelerationMpS2)
-                                - 2D * (double)(KVBSignalTargetDistanceM * GravityNpKg * KVBDeclivity)
-                            )
-                            - BrakingEstablishedDelayS * DecelerationMpS2
-                            + BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity
-                            - KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2
-                            + KVBEmergencyBrakingAnticipationTimeS * GravityNpKg * KVBDeclivity,
+                            SpeedCurve(
+                                KVBSignalTargetDistanceM,
+                                KVBSignalTargetSpeedMpS,
+                                KVBDeclivity,
+                                BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
+                                DecelerationMpS2
+                            ),
                             KVBNextSignalSpeedLimitMpS + KVBAlertSpeedMpS
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(5f)
@@ -316,16 +299,13 @@ namespace ORTS.Scripting.Script
                 Math.Min(
                     Math.Min(
                         Math.Max(
-                            (float)Math.Sqrt(
-                                Math.Pow((double)(BrakingEstablishedDelayS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)BrakingEstablishedDelayS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)BrakingEstablishedDelayS * (double)(GravityNpKg * KVBDeclivity), 2D)
-                                + 2D * (double)(KVBSpeedPostTargetDistanceM * DecelerationMpS2)
-                                - 2D * (double)(KVBSpeedPostTargetDistanceM * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)KVBSpeedPostTargetSpeedMpS, 2D)
-                            )
-                            - BrakingEstablishedDelayS * DecelerationMpS2
-                            + BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity,
+                            SpeedCurve(
+                                KVBSpeedPostTargetDistanceM,
+                                KVBSpeedPostTargetSpeedMpS,
+                                KVBDeclivity,
+                                BrakingEstablishedDelayS,
+                                DecelerationMpS2
+                            ),
                             KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(10f)
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(10f)
@@ -336,24 +316,13 @@ namespace ORTS.Scripting.Script
                 Math.Min(
                     Math.Min(
                         Math.Max(
-                            (float)Math.Sqrt(
-                                Math.Pow((double)(BrakingEstablishedDelayS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)BrakingEstablishedDelayS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + 2D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS) * Math.Pow((double)DecelerationMpS2, 2D)
-                                - 4D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)(BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity), 2D)
-                                + 2D * (double)(BrakingEstablishedDelayS * KVBEmergencyBrakingAnticipationTimeS) * Math.Pow((double)(GravityNpKg * KVBDeclivity), 2D)
-                                + Math.Pow((double)(KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2), 2D)
-                                - 2D * Math.Pow((double)KVBEmergencyBrakingAnticipationTimeS, 2D) * (double)(DecelerationMpS2 * GravityNpKg * KVBDeclivity)
-                                + Math.Pow((double)(KVBEmergencyBrakingAnticipationTimeS * GravityNpKg * KVBDeclivity), 2D)
-                                + Math.Pow((double)KVBSpeedPostTargetSpeedMpS, 2D)
-                                + 2D * (double)(KVBSpeedPostTargetDistanceM * DecelerationMpS2)
-                                - 2D * (double)(KVBSpeedPostTargetDistanceM * GravityNpKg * KVBDeclivity)
-                            )
-                            - BrakingEstablishedDelayS * DecelerationMpS2
-                            + BrakingEstablishedDelayS * GravityNpKg * KVBDeclivity
-                            - KVBEmergencyBrakingAnticipationTimeS * DecelerationMpS2
-                            + KVBEmergencyBrakingAnticipationTimeS * GravityNpKg * KVBDeclivity,
+                            SpeedCurve(
+                                KVBSpeedPostTargetDistanceM,
+                                KVBSpeedPostTargetSpeedMpS,
+                                KVBDeclivity,
+                                BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
+                                DecelerationMpS2
+                            ),
                             KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(5f)
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(5f)
