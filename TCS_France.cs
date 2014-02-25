@@ -28,8 +28,8 @@ namespace ORTS.Scripting.Script
             RSO,        // RSO only
             DAAT,       // RSO + DAAT
             KVB,        // RSO + KVB
-            TVM300,     // RSO partially inhibited + TVM300
-            TVM430,     // RSO partially inhibited + TVM430
+            TVM300,     // RSO partially inhibited + KVB partially inhibited + TVM300
+            TVM430,     // RSO partially inhibited + KVB partially inhibited + TVM430
             ETCS        // ETCS only
         }
 
@@ -88,8 +88,11 @@ namespace ORTS.Scripting.Script
         float KVBNextSpeedPostSpeedLimitMpS;
         float KVBSpeedPostTargetSpeedMpS;
         float KVBSpeedPostTargetDistanceM;
-        float KVBAlertSpeedMpS;
-        float KVBEBSpeedMpS;
+
+        float KVBCurrentAlertSpeedMpS;
+        float KVBCurrentEBSpeedMpS;
+        float KVBNextAlertSpeedMpS;
+        float KVBNextEBSpeedMpS;
 
         float KVBSignalEmergencySpeedCurveMpS;
         float KVBSignalAlertSpeedCurveMpS;
@@ -132,8 +135,10 @@ namespace ORTS.Scripting.Script
             KVBSpeedPostTargetSpeedMpS = KVBTrainSpeedLimitMpS;
             KVBSpeedPostTargetDistanceM = 0f;
 
-            KVBAlertSpeedMpS = MpS.FromKpH(5);
-            KVBEBSpeedMpS = MpS.FromKpH(10);
+            KVBCurrentAlertSpeedMpS = MpS.FromKpH(5f);
+            KVBCurrentEBSpeedMpS = MpS.FromKpH(10f);
+            KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+            KVBNextEBSpeedMpS = MpS.FromKpH(10f);
 
             Activated = true;
         }
@@ -210,15 +215,15 @@ namespace ORTS.Scripting.Script
                     case Aspect.Stop:
                         KVBNextSignalSpeedLimitMpS = MpS.FromKpH(10f);
                         KVBSignalTargetSpeedMpS = 0f;
-                        KVBAlertSpeedMpS = MpS.FromKpH(2.5f);
-                        KVBEBSpeedMpS = MpS.FromKpH(5f);
+                        KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
+                        KVBNextEBSpeedMpS = MpS.FromKpH(5f);
                         break;
 
                     case Aspect.StopAndProceed:
                         KVBNextSignalSpeedLimitMpS = MpS.FromKpH(30f);
                         KVBSignalTargetSpeedMpS = 0f;
-                        KVBAlertSpeedMpS = MpS.FromKpH(5f);
-                        KVBEBSpeedMpS = MpS.FromKpH(10f);
+                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
                         break;
 
                     case Aspect.Clear_1:
@@ -232,8 +237,8 @@ namespace ORTS.Scripting.Script
                         else
                             KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
                         KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
-                        KVBAlertSpeedMpS = MpS.FromKpH(5f);
-                        KVBEBSpeedMpS = MpS.FromKpH(10f);
+                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
                         break;
                 }
             }
@@ -242,7 +247,11 @@ namespace ORTS.Scripting.Script
 
             // Update current speed limit when speed is below the target or when the train approaches the signal
             if (NextSignalDistanceM(0) <= 10f)
+            {
                 KVBCurrentSignalSpeedLimitMpS = KVBNextSignalSpeedLimitMpS;
+                KVBCurrentAlertSpeedMpS = KVBNextAlertSpeedMpS;
+                KVBCurrentEBSpeedMpS = KVBNextEBSpeedMpS;
+            }
 
             // Speed post speed limit preparation
 
@@ -272,11 +281,11 @@ namespace ORTS.Scripting.Script
                                 BrakingEstablishedDelayS,
                                 DecelerationMpS2
                             ),
-                            KVBNextSignalSpeedLimitMpS + KVBEBSpeedMpS
+                            KVBNextSignalSpeedLimitMpS + KVBNextEBSpeedMpS
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(10f)
                     ),
-                    KVBCurrentSignalSpeedLimitMpS + KVBEBSpeedMpS
+                    KVBCurrentSignalSpeedLimitMpS + KVBCurrentEBSpeedMpS
                 );
             KVBSignalAlertSpeedCurveMpS =
                 Math.Min(
@@ -289,11 +298,11 @@ namespace ORTS.Scripting.Script
                                 BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
                                 DecelerationMpS2
                             ),
-                            KVBNextSignalSpeedLimitMpS + KVBAlertSpeedMpS
+                            KVBNextSignalSpeedLimitMpS + KVBNextAlertSpeedMpS
                         ),
                         KVBTrainSpeedLimitMpS + MpS.FromKpH(5f)
                     ),
-                    KVBCurrentSignalSpeedLimitMpS + KVBAlertSpeedMpS
+                    KVBCurrentSignalSpeedLimitMpS + KVBCurrentAlertSpeedMpS
                 );
             KVBSpeedPostEmergencySpeedCurveMpS =
                 Math.Min(
