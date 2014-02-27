@@ -43,6 +43,7 @@ namespace ORTS.Scripting.Script
         }
 
         CCS ActiveCCS = CCS.RSO;
+        CCS PreviousCCS = CCS.RSO;
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
         // Train parameters
@@ -65,6 +66,11 @@ namespace ORTS.Scripting.Script
         bool RSOType2Inhibition = false;                    // Inhibition 2 : KVB not inhibited and train on HSL
         bool RSOType3Inhibition = false;                    // Inhibition 3 : TVM COVIT not inhibited
 
+        bool RSOClosedSignal = false;
+        bool RSOPreviousClosedSignal = false;
+        bool RSOOpenedSignal = false;
+        bool RSOPreviousOpenedSignal = false;
+
         // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
         // Not implemented
 
@@ -77,7 +83,6 @@ namespace ORTS.Scripting.Script
         bool KVBEmergencyBraking = false;
         bool KVBPreviousEmergencyBraking = false;
 
-        float KVBPreviousSignalDistanceM;                   // D
         float KVBCurrentSignalSpeedLimitMpS;
         float KVBNextSignalSpeedLimitMpS;
         float KVBSignalTargetSpeedMpS;
@@ -99,8 +104,16 @@ namespace ORTS.Scripting.Script
         float KVBSpeedPostEmergencySpeedCurveMpS;
         float KVBSpeedPostAlertSpeedCurveMpS;
 
-        // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
+        // TVM COVIT common
         bool TVMCOVITInhibited = false;
+
+        Aspect TVMPreviousAspect;
+        bool TVMClosedSignal;
+        bool TVMPreviousClosedSignal;
+        bool TVMOpenedSignal;
+        bool TVMPreviousOpenedSignal;
+
+        // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
         float TVM300TrainSpeedLimitMpS = MpS.FromKpH(300f);
 
         float TVM300CurrentSpeedLimitMpS;
@@ -115,6 +128,10 @@ namespace ORTS.Scripting.Script
         bool VigilanceAlarm = false;
         bool VigilanceEmergency = false;
 
+        // Other variables
+        float PreviousSignalDistanceM = 0f;
+        bool SignalPassed = false;
+
         public TCS_France() { }
 
         public override void Initialize()
@@ -124,7 +141,6 @@ namespace ORTS.Scripting.Script
             else if (HeavyFreightTrain)
                 BrakingEstablishedDelayS = 12f + TrainLengthM / 200f;
 
-            KVBPreviousSignalDistanceM = 0f;
             KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
             KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
             KVBSignalTargetSpeedMpS = KVBTrainSpeedLimitMpS;
@@ -141,29 +157,34 @@ namespace ORTS.Scripting.Script
             KVBNextEBSpeedMpS = MpS.FromKpH(10f);
 
             Activated = true;
+            PreviousSignalDistanceM = 0f;
         }
 
         public override void Update()
         {
             SetNextSignalAspect(NextSignalAspect(0));
+            UpdateSignalPassed();
 
             if (!KVBPresent && !DAATPresent)
             {
                 ActiveCCS = CCS.RSO;
 
+                UpdateRSO();
                 UpdateVACMA();
             }
             else if (!KVBPresent && DAATPresent)
             {
                 ActiveCCS = CCS.DAAT;
 
+                UpdateRSO();
                 UpdateVACMA();
             }
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
+            else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
             {
                 // Classic line = KVB active
                 ActiveCCS = CCS.KVB;
 
+                UpdateRSO();
                 UpdateKVB();
                 UpdateVACMA();
             }
@@ -177,6 +198,8 @@ namespace ORTS.Scripting.Script
                     ActiveCCS = CCS.TVM300;
 
                     UpdateTVM300();
+                    UpdateRSO();
+                    UpdateVACMA();
                 }
                 else
                 {
@@ -188,27 +211,59 @@ namespace ORTS.Scripting.Script
                     SetEmergency();
                 }
             }
+
+            RSOType1Inhibition = false; // No function for reverse
+            RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
+            RSOType3Inhibition = (TVM300Present || TVM430Present) && !TVMCOVITInhibited;
+
+            PreviousCCS = ActiveCCS;
         }
 
         public override void SetEmergency()
         {
             SetPenaltyApplicationDisplay(true);
-            if (IsBrakeEmergency())
-                return;
             SetEmergencyBrake();
-
-            SetThrottleController(0.0f); // Necessary while second locomotive isn't switched off during EB.
             SetPantographsDown();
         }
 
         protected void UpdateRSO()
         {
+            if (NextSignalDistanceM(0) < 2f && CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f))
+            {
+                if (NextSignalAspect(0) == Aspect.Stop
+                    || NextSignalAspect(0) == Aspect.StopAndProceed
+                    || NextSignalAspect(0) == Aspect.Restricted)
+                    RSOClosedSignal = true;
+                else if (NextSignalAspect(1) == Aspect.Stop
+                    || NextSignalAspect(1) == Aspect.StopAndProceed)
+                    RSOClosedSignal = true;
+                else if (NextSignalSpeedLimitMpS(1) >= 0f && NextSignalSpeedLimitMpS(1) < MpS.FromKpH(160f))
+                    RSOClosedSignal = true;
+                else
+                    RSOOpenedSignal = true;
+            }
+            if (SignalPassed)
+                RSOClosedSignal = RSOOpenedSignal = false;
+
+            if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
+                TriggerSoundInfo1();
+
+            RSOPreviousClosedSignal = RSOClosedSignal;
+
+            if ((TVM300Present || TVM430Present) && TVMClosedSignal && !TVMPreviousClosedSignal)
+                TriggerSoundInfo1();
+
+            if ((TVM300Present || TVM430Present) && TVMOpenedSignal && !TVMPreviousOpenedSignal)
+                TriggerSoundInfo1();
+
+            TVMPreviousClosedSignal = TVMClosedSignal;
+            TVMPreviousOpenedSignal = TVMOpenedSignal;
         }
 
         protected void UpdateKVB()
         {
             // Decode signal aspect
-            if (NextSignalDistanceM(0) > KVBPreviousSignalDistanceM)
+            if (SignalPassed)
             {
                 switch (NextSignalAspect(0))
                 {
@@ -242,7 +297,6 @@ namespace ORTS.Scripting.Script
                         break;
                 }
             }
-            KVBPreviousSignalDistanceM = NextSignalDistanceM(0);
             KVBSignalTargetDistanceM = NextSignalDistanceM(0);
 
             // Update current speed limit when speed is below the target or when the train approaches the signal
@@ -414,6 +468,18 @@ namespace ORTS.Scripting.Script
                 TVM300EmergencyBraking = false;
                 SetPenaltyApplicationDisplay(false);
             }
+
+            if (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed)
+                TVMClosedSignal = true;
+            else
+                TVMClosedSignal = false;
+
+            if (TVMPreviousAspect > NextSignalAspect(0))
+                TVMOpenedSignal = true;
+            else
+                TVMOpenedSignal = false;
+
+            TVMPreviousAspect = NextSignalAspect(0);
         }
 
         protected void UpdateTVM430()
@@ -434,6 +500,13 @@ namespace ORTS.Scripting.Script
         {
             if (!IsAlerterEnabled())
                 return;
+        }
+
+        protected void UpdateSignalPassed()
+        {
+            SignalPassed = NextSignalDistanceM(0) > PreviousSignalDistanceM;
+
+            PreviousSignalDistanceM = NextSignalDistanceM(0);
         }
     }
 }
