@@ -318,6 +318,15 @@ namespace ORTS.Scripting.Script
             SetCurrentSpeedLimitMpS(Math.Min(KVBCurrentSignalSpeedLimitMpS, KVBCurrentSpeedPostSpeedLimitMpS));
 
             UpdateKVBSpeedCurve();
+
+            // Pre-announce aspect => KVB beep
+            if (SignalPassed
+                && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                && KVBNextSignalSpeedLimitMpS <= MpS.FromKpH(160f)
+                )
+            {
+                TriggerSoundInfo2();
+            }
         }
 
         protected void UpdateKVBSpeedCurve()
