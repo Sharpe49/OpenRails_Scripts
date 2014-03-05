@@ -263,41 +263,72 @@ namespace ORTS.Scripting.Script
         protected void UpdateKVB()
         {
             // Decode signal aspect
-            if (SignalPassed)
+            switch (NextSignalAspect(0))
             {
-                switch (NextSignalAspect(0))
-                {
-                    case Aspect.Stop:
+                case Aspect.Stop:
+                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
+                    if (SignalPassed)
+                    {
                         KVBNextSignalSpeedLimitMpS = MpS.FromKpH(10f);
                         KVBSignalTargetSpeedMpS = 0f;
                         KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
                         KVBNextEBSpeedMpS = MpS.FromKpH(5f);
-                        break;
+                    }
+                    break;
 
-                    case Aspect.StopAndProceed:
+                case Aspect.StopAndProceed:
+                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
+                    if (SignalPassed)
+                    {
                         KVBNextSignalSpeedLimitMpS = MpS.FromKpH(30f);
                         KVBSignalTargetSpeedMpS = 0f;
                         KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
                         KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                        break;
+                    }
+                    break;
 
-                    case Aspect.Clear_1:
-                    case Aspect.Clear_2:
-                    case Aspect.Approach_1:
-                    case Aspect.Approach_2:
-                    case Aspect.Approach_3:
-                    case Aspect.Restricted:
-                        if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                            KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                        else
-                            KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-                        KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
-                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                        break;
-                }
+                default:
+                    switch (NextSignalAspect(1))
+                    {
+                        case Aspect.Stop:
+                            KVBSignalTargetDistanceM = NextSignalDistanceM(1);
+                            if (SignalPassed)
+                            {
+                                KVBNextSignalSpeedLimitMpS = MpS.FromKpH(10f);
+                                KVBSignalTargetSpeedMpS = 0f;
+                                KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
+                                KVBNextEBSpeedMpS = MpS.FromKpH(5f);
+                            }
+                            break;
+
+                        case Aspect.StopAndProceed:
+                            KVBSignalTargetDistanceM = NextSignalDistanceM(1);
+                            if (SignalPassed)
+                            {
+                                KVBNextSignalSpeedLimitMpS = MpS.FromKpH(30f);
+                                KVBSignalTargetSpeedMpS = 0f;
+                                KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+                                KVBNextEBSpeedMpS = MpS.FromKpH(10f);
+                            }
+                            break;
+
+                        default:
+                            KVBSignalTargetDistanceM = NextSignalDistanceM(0);
+                            if (SignalPassed)
+                            {
+                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
+                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                                else
+                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
+
+                                KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
+                                KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+                                KVBNextEBSpeedMpS = MpS.FromKpH(10f);
+                            }
+                            break;
+                    }
+                    break;
             }
-            KVBSignalTargetDistanceM = NextSignalDistanceM(0);
 
             // Update current speed limit when speed is below the target or when the train approaches the signal
             if (NextSignalDistanceM(0) <= 10f)
