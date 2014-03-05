@@ -333,7 +333,7 @@ namespace ORTS.Scripting.Script
             // Update current speed limit when speed is below the target or when the train approaches the signal
             if (NextSignalDistanceM(0) <= 10f)
             {
-                KVBCurrentSignalSpeedLimitMpS = KVBNextSignalSpeedLimitMpS;
+                KVBCurrentSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
                 KVBCurrentAlertSpeedMpS = KVBNextAlertSpeedMpS;
                 KVBCurrentEBSpeedMpS = KVBNextEBSpeedMpS;
             }
