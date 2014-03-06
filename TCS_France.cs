@@ -336,11 +336,12 @@ namespace ORTS.Scripting.Script
             }
 
             // Update current speed limit when speed is below the target or when the train approaches the signal
-            if (NextSignalDistanceM(0) <= 10f)
+            if (NextSignalDistanceM(0) <= 5f)
             {
-                KVBCurrentSignalSpeedLimitMpS = KVBNextSignalSpeedLimitMpS;
-                KVBCurrentAlertSpeedMpS = KVBNextAlertSpeedMpS;
-                KVBCurrentEBSpeedMpS = KVBNextEBSpeedMpS;
+                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
+                    KVBCurrentSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                else
+                    KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
             }
 
             // Speed post speed limit preparation
