@@ -294,7 +294,10 @@ namespace ORTS.Scripting.Script
                             KVBSignalTargetDistanceM = NextSignalDistanceM(1);
                             if (SignalPassed)
                             {
-                                KVBNextSignalSpeedLimitMpS = MpS.FromKpH(10f);
+                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
+                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                                else
+                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
                                 KVBSignalTargetSpeedMpS = 0f;
                                 KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
                                 KVBNextEBSpeedMpS = MpS.FromKpH(5f);
@@ -305,7 +308,10 @@ namespace ORTS.Scripting.Script
                             KVBSignalTargetDistanceM = NextSignalDistanceM(1);
                             if (SignalPassed)
                             {
-                                KVBNextSignalSpeedLimitMpS = MpS.FromKpH(30f);
+                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
+                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                                else
+                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
                                 KVBSignalTargetSpeedMpS = 0f;
                                 KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
                                 KVBNextEBSpeedMpS = MpS.FromKpH(10f);
@@ -320,7 +326,6 @@ namespace ORTS.Scripting.Script
                                     KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
                                 else
                                     KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-
                                 KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
                                 KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
                                 KVBNextEBSpeedMpS = MpS.FromKpH(10f);
@@ -333,7 +338,7 @@ namespace ORTS.Scripting.Script
             // Update current speed limit when speed is below the target or when the train approaches the signal
             if (NextSignalDistanceM(0) <= 10f)
             {
-                KVBCurrentSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                KVBCurrentSignalSpeedLimitMpS = KVBNextSignalSpeedLimitMpS;
                 KVBCurrentAlertSpeedMpS = KVBNextAlertSpeedMpS;
                 KVBCurrentEBSpeedMpS = KVBNextEBSpeedMpS;
             }
