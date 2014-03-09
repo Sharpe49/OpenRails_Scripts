@@ -125,8 +125,18 @@ namespace ORTS.Scripting.Script
         // Not implemented
 
         // Vigilance monitoring (VACMA)
-        bool VigilanceAlarm = false;
-        bool VigilanceEmergency = false;
+        float VACMAActivationSpeedMpS;
+        float VACMAPressedAlertDelayS = 55f;
+        float VACMAPressedEmergencyDelayS = 60f;
+        float VACMAReleasedAlertDelayS = 2.5f;
+        float VACMAReleasedEmergencyDelayS = 5f;
+
+        Timer VACMAPressedAlertTimer;
+        Timer VACMAPressedEmergencyTimer;
+        Timer VACMAReleasedAlertTimer;
+        Timer VACMAReleasedEmergencyTimer;
+        bool VACMAEmergencyBraking = false;
+        bool VACMAPressed = false;
 
         // Other variables
         float PreviousSignalDistanceM = 0f;
@@ -155,6 +165,16 @@ namespace ORTS.Scripting.Script
             KVBCurrentEBSpeedMpS = MpS.FromKpH(10f);
             KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
             KVBNextEBSpeedMpS = MpS.FromKpH(10f);
+
+            VACMAActivationSpeedMpS = MpS.FromKpH(3f);
+            VACMAPressedAlertTimer = new Timer(this);
+            VACMAPressedAlertTimer.Setup(VACMAPressedAlertDelayS);
+            VACMAPressedEmergencyTimer = new Timer(this);
+            VACMAPressedEmergencyTimer.Setup(VACMAPressedEmergencyDelayS);
+            VACMAReleasedAlertTimer = new Timer(this);
+            VACMAReleasedAlertTimer.Setup(VACMAReleasedAlertDelayS);
+            VACMAReleasedEmergencyTimer = new Timer(this);
+            VACMAReleasedEmergencyTimer.Setup(VACMAReleasedEmergencyDelayS);
 
             Activated = true;
             PreviousSignalDistanceM = 0f;
@@ -536,16 +556,60 @@ namespace ORTS.Scripting.Script
         {
         }
 
-        public override void AlerterPressed()
+        public override void AlerterPressed(bool pressed)
         {
-            if (!Activated || VigilanceEmergency)
-                return;
+            VACMAPressed = pressed;
         }
 
         protected void UpdateVACMA()
         {
-            if (!IsAlerterEnabled())
+            if (!Activated || !IsAlerterEnabled() || SpeedMpS() < VACMAActivationSpeedMpS)
+            {
+                VACMAReleasedAlertTimer.Stop();
+                VACMAReleasedEmergencyTimer.Stop();
+                VACMAPressedAlertTimer.Stop();
+                VACMAPressedEmergencyTimer.Stop();
+                VACMAEmergencyBraking = false;
+
+                if (AlerterSound())
+                    SetVigilanceAlarm(false);
+                TriggerSoundSystemDeactivate();
                 return;
+            }
+
+            if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+            {
+                VACMAReleasedAlertTimer.Stop();
+                VACMAReleasedEmergencyTimer.Stop();
+                VACMAPressedAlertTimer.Start();
+                VACMAPressedEmergencyTimer.Start();
+            }
+            if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
+            {
+                VACMAReleasedAlertTimer.Start();
+                VACMAReleasedEmergencyTimer.Start();
+                VACMAPressedAlertTimer.Stop();
+                VACMAPressedEmergencyTimer.Stop();
+            }
+
+            if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered && !AlerterSound())
+                SetVigilanceAlarm(true);
+            else if ((!VACMAPressedAlertTimer.Started || !VACMAPressedAlertTimer.Triggered) && AlerterSound())
+                SetVigilanceAlarm(false);
+
+            if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
+                TriggerSoundSystemActivate();
+            else
+                TriggerSoundSystemDeactivate();
+
+            if ((VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered) && !VACMAEmergencyBraking || SpeedMpS() >= 0.1f && VACMAEmergencyBraking)
+            {
+                VACMAEmergencyBraking = true;
+                SetEmergencyBrake();
+                SetPantographsDown();
+            }
+            if (VACMAEmergencyBraking && SpeedMpS() < 0.1f)
+                VACMAEmergencyBraking = false;
         }
 
         protected void UpdateSignalPassed()
