@@ -82,6 +82,8 @@ namespace ORTS.Scripting.Script
         bool KVBPreviousOverspeed = false;
         bool KVBEmergencyBraking = false;
         bool KVBPreviousEmergencyBraking = false;
+        bool KVBPreAnnounceActive = false;
+        bool KVBPreviousPreAnnounceActive = false;
 
         float KVBCurrentSignalSpeedLimitMpS;
         float KVBNextSignalSpeedLimitMpS;
@@ -182,12 +184,13 @@ namespace ORTS.Scripting.Script
 
         public override void Update()
         {
-            SetNextSignalAspect(NextSignalAspect(0));
             UpdateSignalPassed();
 
             if (!KVBPresent && !DAATPresent)
             {
                 ActiveCCS = CCS.RSO;
+
+                SetNextSignalAspect(Aspect.Clear_1);
 
                 UpdateRSO();
                 UpdateVACMA();
@@ -196,6 +199,8 @@ namespace ORTS.Scripting.Script
             {
                 ActiveCCS = CCS.DAAT;
 
+                SetNextSignalAspect(Aspect.Clear_1);
+
                 UpdateRSO();
                 UpdateVACMA();
             }
@@ -203,6 +208,9 @@ namespace ORTS.Scripting.Script
             {
                 // Classic line = KVB active
                 ActiveCCS = CCS.KVB;
+
+                if (SignalPassed)
+                    SetNextSignalAspect(NextSignalAspect(0));
 
                 UpdateRSO();
                 UpdateKVB();
@@ -217,6 +225,8 @@ namespace ORTS.Scripting.Script
                 {
                     ActiveCCS = CCS.TVM300;
 
+                    SetNextSignalAspect(NextSignalAspect(0));
+
                     UpdateTVM300();
                     UpdateRSO();
                     UpdateVACMA();
@@ -225,6 +235,9 @@ namespace ORTS.Scripting.Script
                 {
                     // TVM not activated because not present
                     ActiveCCS = CCS.KVB;
+
+                    if (SignalPassed)
+                        SetNextSignalAspect(NextSignalAspect(0));
 
                     KVBEmergencyBraking = true;
                     SetPenaltyApplicationDisplay(true);
@@ -307,7 +320,10 @@ namespace ORTS.Scripting.Script
                     }
                     break;
 
-                default:
+                // Approach : Check if the 2nd signal is red (a yellow blinking aspect may have been crossed)
+                case Aspect.Approach_1:
+                case Aspect.Approach_2:
+                case Aspect.Approach_3:
                     switch (NextSignalAspect(1))
                     {
                         case Aspect.Stop:
@@ -353,6 +369,21 @@ namespace ORTS.Scripting.Script
                             break;
                     }
                     break;
+
+                // Clear 
+                default:
+                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
+                    if (SignalPassed)
+                    {
+                        if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
+                            KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
+                        else
+                            KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
+                        KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
+                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
+                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
+                    }
+                    break;
             }
 
             // Update current speed limit when speed is below the target or when the train approaches the signal
@@ -377,13 +408,37 @@ namespace ORTS.Scripting.Script
             UpdateKVBSpeedCurve();
 
             // Pre-announce aspect => KVB beep
-            if (SignalPassed
-                && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
-                && KVBNextSignalSpeedLimitMpS <= MpS.FromKpH(160f)
-                )
+            if (KVBCurrentSpeedPostSpeedLimitMpS > MpS.FromKpH(160f))
             {
-                TriggerSoundInfo2();
+                if (
+                        SignalPassed
+                        && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                        && KVBNextSignalSpeedLimitMpS <= MpS.FromKpH(160f)
+                        && KVBPreAnnounceActive
+                    )
+                    KVBPreAnnounceActive = false;
+                else if (
+                        KVBNextSpeedPostSpeedLimitMpS <= MpS.FromKpH(160f)
+                        && KVBSpeedPostTargetDistanceM < DistanceCurve(
+                            KVBCurrentSpeedPostSpeedLimitMpS,
+                            KVBNextSpeedPostSpeedLimitMpS,
+                            KVBDeclivity,
+                            BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
+                            DecelerationMpS2
+                        )
+                        && KVBPreAnnounceActive
+                    )
+                    KVBPreAnnounceActive = false;
+                else
+                    KVBPreAnnounceActive = true;
             }
+            else
+                KVBPreAnnounceActive = false;
+
+            if (!KVBPreAnnounceActive && KVBPreviousPreAnnounceActive)
+                TriggerSoundInfo2();
+
+            KVBPreviousPreAnnounceActive = KVBPreAnnounceActive;
         }
 
         protected void UpdateKVBSpeedCurve()
@@ -552,13 +607,18 @@ namespace ORTS.Scripting.Script
         {
         }
 
-        public override void AlerterReset()
+        public override void HandleEvent(TCSEvent evt, string message)
         {
-        }
+            switch (evt)
+            {
+                case TCSEvent.AlerterPressed:
+                    VACMAPressed = true;
+                    break;
 
-        public override void AlerterPressed(bool pressed)
-        {
-            VACMAPressed = pressed;
+                case TCSEvent.AlerterReleased:
+                    VACMAPressed = false;
+                    break;
+            }
         }
 
         protected void UpdateVACMA()
@@ -571,9 +631,8 @@ namespace ORTS.Scripting.Script
                 VACMAPressedEmergencyTimer.Stop();
                 VACMAEmergencyBraking = false;
 
-                if (AlerterSound())
-                    SetVigilanceAlarm(false);
-                TriggerSoundSystemDeactivate();
+                TriggerSoundWarning2();
+                TriggerSoundAlert2();
                 return;
             }
 
@@ -592,17 +651,18 @@ namespace ORTS.Scripting.Script
                 VACMAPressedEmergencyTimer.Stop();
             }
 
-            if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered && !AlerterSound())
-                SetVigilanceAlarm(true);
-            else if ((!VACMAPressedAlertTimer.Started || !VACMAPressedAlertTimer.Triggered) && AlerterSound())
-                SetVigilanceAlarm(false);
-
             if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
-                TriggerSoundSystemActivate();
+                TriggerSoundWarning1();
             else
-                TriggerSoundSystemDeactivate();
+                TriggerSoundWarning2();
 
-            if ((VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered) && !VACMAEmergencyBraking || SpeedMpS() >= 0.1f && VACMAEmergencyBraking)
+            if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered)
+                TriggerSoundAlert1();
+            else
+                TriggerSoundAlert2();
+
+            if ((VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered) && !VACMAEmergencyBraking
+                || SpeedMpS() >= 0.1f && VACMAEmergencyBraking)
             {
                 VACMAEmergencyBraking = true;
                 SetEmergencyBrake();
@@ -614,7 +674,7 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateSignalPassed()
         {
-            SignalPassed = NextSignalDistanceM(0) > PreviousSignalDistanceM;
+            SignalPassed = NextSignalDistanceM(0) > PreviousSignalDistanceM && SpeedMpS() > 0;
 
             PreviousSignalDistanceM = NextSignalDistanceM(0);
         }
