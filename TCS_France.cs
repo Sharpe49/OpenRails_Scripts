@@ -410,26 +410,29 @@ namespace ORTS.Scripting.Script
             // Pre-announce aspect => KVB beep
             if (KVBCurrentSpeedPostSpeedLimitMpS > MpS.FromKpH(160f))
             {
-                if (
+                if (KVBPreAnnounceActive)
+                {
+                    if (
                         SignalPassed
                         && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
                         && KVBNextSignalSpeedLimitMpS <= MpS.FromKpH(160f)
-                        && KVBPreAnnounceActive
                     )
-                    KVBPreAnnounceActive = false;
-                else if (
+                        KVBPreAnnounceActive = false;
+                    else if (
                         KVBNextSpeedPostSpeedLimitMpS <= MpS.FromKpH(160f)
-                        && KVBSpeedPostTargetDistanceM < DistanceCurve(
-                            KVBCurrentSpeedPostSpeedLimitMpS,
-                            KVBNextSpeedPostSpeedLimitMpS,
-                            KVBDeclivity,
-                            BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
-                            DecelerationMpS2
-                        )
-                        && KVBPreAnnounceActive
+                        && KVBSpeedPostTargetDistanceM <= 2000f
                     )
-                    KVBPreAnnounceActive = false;
-                else
+                        KVBPreAnnounceActive = false;
+                }
+                else if (
+                    SignalPassed
+                    && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                    && KVBNextSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                    && (
+                        KVBNextSpeedPostSpeedLimitMpS > MpS.FromKpH(160f)
+                        || KVBSpeedPostTargetDistanceM > 2000f
+                    )
+                )
                     KVBPreAnnounceActive = true;
             }
             else
