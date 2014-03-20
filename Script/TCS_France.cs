@@ -47,21 +47,19 @@ namespace ORTS.Scripting.Script
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
         // Train parameters
-        bool DAATPresent = false;                           // DAAT
-        bool KVBPresent = true;                             // KVB
-        bool TVM300Present = true;                          // TVM300
-        bool TVM430Present = false;                         // TVM430 (Not implemented)
-        bool ETCSPresent = false;                           // ETCS (Not implemented)
+        bool DAATPresent;                                   // DAAT
+        bool KVBPresent;                                    // KVB
+        bool TVM300Present;                                 // TVM300
+        bool TVM430Present;                                 // TVM430 (Not implemented)
+        bool ETCSPresent;                                   // ETCS (Not implemented)
         ETCSLevel ETCSMaxLevel = ETCSLevel.L0;              // ETCS maximum level (Not implemented)
-        bool ElectroPneumaticBrake = true;                  // EP
-        bool HeavyFreightTrain = false;                     // MA train only
-        float TrainLengthM = 400f;                          // L
-        float MaxSpeedLimitMpS = MpS.FromKpH(320);          // VT
-        float BrakingEstablishedDelayS = 2f;                // Tbo
-        float DecelerationMpS2 = 0.9f;                      // Gamma
+        bool ElectroPneumaticBrake;                         // EP
+        bool HeavyFreightTrain;                             // MA train only
+        float SafeDecelerationMpS2;                         // Gamma
 
         // RSO (Répétition Optique des Signaux / Optical Signal Repetition)
-        float RSOEmergencyBrakeDelay = 4f;
+        const float RSODelayBeforeEmergencyBrakingS = 4f;
+
         bool RSOType1Inhibition = false;                    // Inhibition 1 : Reverse
         bool RSOType2Inhibition = false;                    // Inhibition 2 : KVB not inhibited and train on HSL
         bool RSOType3Inhibition = false;                    // Inhibition 3 : TVM COVIT not inhibited
@@ -75,9 +73,11 @@ namespace ORTS.Scripting.Script
         // Not implemented
 
         // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
-        bool KVBInhibited = false;
-        float KVBEmergencyBrakingAnticipationTimeS = 5f;    // Tx
-        float KVBTrainSpeedLimitMpS = MpS.FromKpH(220f);     // VT
+        bool KVBInhibited;
+        const float KVBDelayBeforeEmergencyBrakingS = 5f;   // Tx
+        float KVBTrainSpeedLimitMpS;                        // VT
+        float KVBTrainLengthM;                              // L
+        float KVBDelayBeforeBrakingEstablishedS;            // Tbo
 
         bool KVBPreviousOverspeed = false;
         bool KVBEmergencyBraking = false;
@@ -116,7 +116,7 @@ namespace ORTS.Scripting.Script
         bool TVMPreviousOpenedSignal;
 
         // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
-        float TVM300TrainSpeedLimitMpS = MpS.FromKpH(300f);
+        float TVM300TrainSpeedLimitMpS;
 
         float TVM300CurrentSpeedLimitMpS;
         float TVM300NextSpeedLimitMpS;
@@ -128,10 +128,10 @@ namespace ORTS.Scripting.Script
 
         // Vigilance monitoring (VACMA)
         float VACMAActivationSpeedMpS;
-        float VACMAPressedAlertDelayS = 55f;
-        float VACMAPressedEmergencyDelayS = 60f;
-        float VACMAReleasedAlertDelayS = 2.5f;
-        float VACMAReleasedEmergencyDelayS = 5f;
+        float VACMAReleasedAlertDelayS;
+        float VACMAReleasedEmergencyDelayS;
+        float VACMAPressedAlertDelayS;
+        float VACMAPressedEmergencyDelayS;
 
         Timer VACMAPressedAlertTimer;
         Timer VACMAPressedEmergencyTimer;
@@ -148,11 +148,34 @@ namespace ORTS.Scripting.Script
 
         public override void Initialize()
         {
-            if (!ElectroPneumaticBrake)
-                BrakingEstablishedDelayS = 2f + 2f * (float)Math.Pow((double)TrainLengthM, 2D) * 0.00001f;
-            else if (HeavyFreightTrain)
-                BrakingEstablishedDelayS = 12f + TrainLengthM / 200f;
+            // General section
+            DAATPresent = GetBoolParameter("General", "DAATPresent", false);
+            KVBPresent = GetBoolParameter("General", "KVBPresent", false);
+            TVM300Present = GetBoolParameter("General", "TVM300Present", false);
+            TVM430Present = GetBoolParameter("General", "TVM430Present", false);
+            ETCSPresent = GetBoolParameter("General", "ETCSPresent", false);
+            ElectroPneumaticBrake = GetBoolParameter("General", "ElectroPneumaticBrake", false);
+            HeavyFreightTrain = GetBoolParameter("General", "HeavyFreightTrain", false);
+            SafeDecelerationMpS2 = GetFloatParameter("General", "SafeDecelerationMpS2", 0.7f);
 
+            // KVB section
+            KVBInhibited = GetBoolParameter("KVB", "Inhibited", false);
+            KVBTrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("KVB", "TrainSpeedLimitKpH", 160f));
+
+            // TVM common section
+            TVMCOVITInhibited = GetBoolParameter("TVM", "CovitInhibited", false);
+
+            // TVM300 section
+            TVM300TrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("TVM300", "TrainSpeedLimitKpH", 300f));
+
+            // VACMA section
+            VACMAActivationSpeedMpS = MpS.FromKpH(GetFloatParameter("VACMA", "ActivationSpeedKpH", 3f));
+            VACMAReleasedAlertDelayS = GetFloatParameter("VACMA", "ReleasedAlertDelayS", 2.5f);
+            VACMAReleasedEmergencyDelayS = GetFloatParameter("VACMA", "ReleasedEmergencyDelayS", 5f);
+            VACMAPressedAlertDelayS = GetFloatParameter("VACMA", "PressedAlertDelayS", 55f);
+            VACMAPressedEmergencyDelayS = GetFloatParameter("VACMA", "PressedEmergencyDelayS", 60f);
+
+            // Variables initialization
             KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
             KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
             KVBSignalTargetSpeedMpS = KVBTrainSpeedLimitMpS;
@@ -168,7 +191,6 @@ namespace ORTS.Scripting.Script
             KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
             KVBNextEBSpeedMpS = MpS.FromKpH(10f);
 
-            VACMAActivationSpeedMpS = MpS.FromKpH(3f);
             VACMAPressedAlertTimer = new Timer(this);
             VACMAPressedAlertTimer.Setup(VACMAPressedAlertDelayS);
             VACMAPressedEmergencyTimer = new Timer(this);
@@ -245,6 +267,9 @@ namespace ORTS.Scripting.Script
                 }
             }
 
+            if (ActiveCCS != CCS.TVM300 || ActiveCCS != CCS.TVM430)
+                TVMPreviousAspect = Aspect.None;
+
             RSOType1Inhibition = false; // No function for reverse
             RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
             RSOType3Inhibition = (TVM300Present || TVM430Present) && !TVMCOVITInhibited;
@@ -261,7 +286,9 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateRSO()
         {
-            if (NextSignalDistanceM(0) < 2f && CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f))
+            if (NextSignalDistanceM(0) < 2f
+                && (ActiveCCS == CCS.RSO || ActiveCCS == CCS.DAAT || ActiveCCS == CCS.KVB)
+                && SpeedMpS() > 0)
             {
                 if (NextSignalAspect(0) == Aspect.Stop
                     || NextSignalAspect(0) == Aspect.StopAndProceed
@@ -295,6 +322,14 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVB()
         {
+            KVBTrainLengthM = (float)Math.Ceiling((double)(TrainLengthM() / 100f)) * 100f;
+            if (ElectroPneumaticBrake)
+                KVBDelayBeforeBrakingEstablishedS = 2f;
+            else if (HeavyFreightTrain)
+                KVBDelayBeforeBrakingEstablishedS = 12f + KVBTrainLengthM / 200f;
+            else
+                KVBDelayBeforeBrakingEstablishedS = 2f + 2f * KVBTrainLengthM * KVBTrainLengthM * 0.00001f;
+
             // Decode signal aspect
             switch (NextSignalAspect(0))
             {
@@ -456,8 +491,8 @@ namespace ORTS.Scripting.Script
                                 KVBSignalTargetDistanceM,
                                 KVBSignalTargetSpeedMpS,
                                 KVBDeclivity,
-                                BrakingEstablishedDelayS,
-                                DecelerationMpS2
+                                KVBDelayBeforeBrakingEstablishedS,
+                                SafeDecelerationMpS2
                             ),
                             KVBNextSignalSpeedLimitMpS + KVBNextEBSpeedMpS
                         ),
@@ -473,8 +508,8 @@ namespace ORTS.Scripting.Script
                                 KVBSignalTargetDistanceM,
                                 KVBSignalTargetSpeedMpS,
                                 KVBDeclivity,
-                                BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
-                                DecelerationMpS2
+                                KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
+                                SafeDecelerationMpS2
                             ),
                             KVBNextSignalSpeedLimitMpS + KVBNextAlertSpeedMpS
                         ),
@@ -490,8 +525,8 @@ namespace ORTS.Scripting.Script
                                 KVBSpeedPostTargetDistanceM,
                                 KVBSpeedPostTargetSpeedMpS,
                                 KVBDeclivity,
-                                BrakingEstablishedDelayS,
-                                DecelerationMpS2
+                                KVBDelayBeforeBrakingEstablishedS,
+                                SafeDecelerationMpS2
                             ),
                             KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(10f)
                         ),
@@ -507,8 +542,8 @@ namespace ORTS.Scripting.Script
                                 KVBSpeedPostTargetDistanceM,
                                 KVBSpeedPostTargetSpeedMpS,
                                 KVBDeclivity,
-                                BrakingEstablishedDelayS + KVBEmergencyBrakingAnticipationTimeS,
-                                DecelerationMpS2
+                                KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
+                                SafeDecelerationMpS2
                             ),
                             KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(5f)
                         ),
