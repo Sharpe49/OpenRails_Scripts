@@ -302,7 +302,12 @@ namespace ORTS.Scripting.Script
         public override void SetEmergency()
         {
             SetEmergencyBrake();
-            SetPantographsDown();
+
+            if (RSOEmergencyBraking
+                || KVBEmergencyBraking
+                || TVMCOVITEmergencyBraking
+                || VACMAEmergencyBraking)
+                SetPantographsDown();
         }
 
         protected void UpdateRSO()
@@ -692,10 +697,16 @@ namespace ORTS.Scripting.Script
                 TriggerSoundAlert2();
 
             if (!VACMAEmergencyBraking && (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
+            {
                 VACMAEmergencyBraking = true;
+                SetVigilanceEmergencyDisplay(true);
+            }
 
             if (VACMAEmergencyBraking && SpeedMpS() < 0.1f)
+            {
                 VACMAEmergencyBraking = false;
+                SetVigilanceEmergencyDisplay(false);
+            }
         }
 
         protected void UpdateSignalPassed()
