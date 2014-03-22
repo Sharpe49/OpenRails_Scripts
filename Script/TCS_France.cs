@@ -46,7 +46,7 @@ namespace ORTS.Scripting.Script
         CCS PreviousCCS = CCS.RSO;
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
-        // Train parameters
+    // Train parameters
         bool DAATPresent;                                   // DAAT
         bool KVBPresent;                                    // KVB
         bool TVM300Present;                                 // TVM300
@@ -57,31 +57,35 @@ namespace ORTS.Scripting.Script
         bool HeavyFreightTrain;                             // MA train only
         float SafeDecelerationMpS2;                         // Gamma
 
-        // RSO (Répétition Optique des Signaux / Optical Signal Repetition)
+    // RSO (Répétition Optique des Signaux / Optical Signal Repetition)
+        // Parameters
         const float RSODelayBeforeEmergencyBrakingS = 4f;
 
+        // Variables
+        bool RSOEmergencyBraking = false;
         bool RSOType1Inhibition = false;                    // Inhibition 1 : Reverse
         bool RSOType2Inhibition = false;                    // Inhibition 2 : KVB not inhibited and train on HSL
         bool RSOType3Inhibition = false;                    // Inhibition 3 : TVM COVIT not inhibited
-
         bool RSOClosedSignal = false;
         bool RSOPreviousClosedSignal = false;
         bool RSOOpenedSignal = false;
         bool RSOPreviousOpenedSignal = false;
 
-        // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
+    // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
         // Not implemented
 
-        // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
+    // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
+        // Parameters
         bool KVBInhibited;
         const float KVBDelayBeforeEmergencyBrakingS = 5f;   // Tx
         float KVBTrainSpeedLimitMpS;                        // VT
         float KVBTrainLengthM;                              // L
         float KVBDelayBeforeBrakingEstablishedS;            // Tbo
 
-        bool KVBPreviousOverspeed = false;
+        // Variables
         bool KVBEmergencyBraking = false;
         bool KVBPreviousEmergencyBraking = false;
+        bool KVBPreviousOverspeed = false;
         bool KVBPreAnnounceActive = false;
         bool KVBPreviousPreAnnounceActive = false;
 
@@ -106,8 +110,12 @@ namespace ORTS.Scripting.Script
         float KVBSpeedPostEmergencySpeedCurveMpS;
         float KVBSpeedPostAlertSpeedCurveMpS;
 
-        // TVM COVIT common
+    // TVM COVIT common
+        // Parameters
         bool TVMCOVITInhibited = false;
+
+        // Variables
+        bool TVMCOVITEmergencyBraking = false;
 
         Aspect TVMPreviousAspect;
         bool TVMClosedSignal;
@@ -115,32 +123,35 @@ namespace ORTS.Scripting.Script
         bool TVMOpenedSignal;
         bool TVMPreviousOpenedSignal;
 
-        // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
+    // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
+        // Parameters
         float TVM300TrainSpeedLimitMpS;
 
+        // Variables
         float TVM300CurrentSpeedLimitMpS;
         float TVM300NextSpeedLimitMpS;
         float TVM300EmergencySpeedMpS;
-        bool TVM300EmergencyBraking;
 
-        // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
+    // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
         // Not implemented
 
-        // Vigilance monitoring (VACMA)
+    // Vigilance monitoring (VACMA)
+        // Parameters
         float VACMAActivationSpeedMpS;
         float VACMAReleasedAlertDelayS;
         float VACMAReleasedEmergencyDelayS;
         float VACMAPressedAlertDelayS;
         float VACMAPressedEmergencyDelayS;
 
+        // Variables
+        bool VACMAEmergencyBraking = false;
+        bool VACMAPressed = false;
         Timer VACMAPressedAlertTimer;
         Timer VACMAPressedEmergencyTimer;
         Timer VACMAReleasedAlertTimer;
         Timer VACMAReleasedEmergencyTimer;
-        bool VACMAEmergencyBraking = false;
-        bool VACMAPressed = false;
 
-        // Other variables
+    // Other variables
         float PreviousSignalDistanceM = 0f;
         bool SignalPassed = false;
 
@@ -234,8 +245,8 @@ namespace ORTS.Scripting.Script
                 if (SignalPassed)
                     SetNextSignalAspect(NextSignalAspect(0));
 
-                UpdateRSO();
                 UpdateKVB();
+                UpdateRSO();
                 UpdateVACMA();
             }
             else
@@ -262,12 +273,23 @@ namespace ORTS.Scripting.Script
                         SetNextSignalAspect(NextSignalAspect(0));
 
                     KVBEmergencyBraking = true;
-                    SetPenaltyApplicationDisplay(true);
-                    SetEmergency();
                 }
             }
 
-            if (ActiveCCS != CCS.TVM300 || ActiveCCS != CCS.TVM430)
+            SetPenaltyApplicationDisplay(
+                IsBrakeEmergency()
+                || RSOEmergencyBraking
+                || KVBEmergencyBraking
+                || TVMCOVITEmergencyBraking
+                || VACMAEmergencyBraking
+            );
+            if (RSOEmergencyBraking
+                || KVBEmergencyBraking
+                || TVMCOVITEmergencyBraking
+                || VACMAEmergencyBraking)
+                SetEmergency();
+
+            if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
                 TVMPreviousAspect = Aspect.None;
 
             RSOType1Inhibition = false; // No function for reverse
@@ -279,7 +301,6 @@ namespace ORTS.Scripting.Script
 
         public override void SetEmergency()
         {
-            SetPenaltyApplicationDisplay(true);
             SetEmergencyBrake();
             SetPantographsDown();
         }
@@ -455,7 +476,7 @@ namespace ORTS.Scripting.Script
                         KVBPreAnnounceActive = false;
                     else if (
                         KVBNextSpeedPostSpeedLimitMpS <= MpS.FromKpH(160f)
-                        && KVBSpeedPostTargetDistanceM <= 2000f
+                        && KVBSpeedPostTargetDistanceM <= 3000f
                     )
                         KVBPreAnnounceActive = false;
                 }
@@ -465,7 +486,7 @@ namespace ORTS.Scripting.Script
                     && KVBNextSignalSpeedLimitMpS > MpS.FromKpH(160f)
                     && (
                         KVBNextSpeedPostSpeedLimitMpS > MpS.FromKpH(160f)
-                        || KVBSpeedPostTargetDistanceM > 2000f
+                        || KVBSpeedPostTargetDistanceM > 3000f
                     )
                 )
                     KVBPreAnnounceActive = true;
@@ -557,11 +578,7 @@ namespace ORTS.Scripting.Script
                 KVBOverspeed = true;
 
                 if (SpeedMpS() > KVBSignalEmergencySpeedCurveMpS)
-                {
                     KVBEmergencyBraking = true;
-                    SetPenaltyApplicationDisplay(true);
-                    SetEmergency();
-                }
             }
 
             if (SpeedMpS() > KVBSpeedPostAlertSpeedCurveMpS)
@@ -569,32 +586,20 @@ namespace ORTS.Scripting.Script
                 KVBOverspeed = true;
 
                 if (SpeedMpS() > KVBSpeedPostEmergencySpeedCurveMpS)
-                {
                     KVBEmergencyBraking = true;
-                    SetPenaltyApplicationDisplay(true);
-                    SetEmergency();
-                }
             }
 
+            if (KVBEmergencyBraking && SpeedMpS() < 0.1f)
+                KVBEmergencyBraking = false;
+
             SetOverspeedWarningDisplay(KVBOverspeed);
-            if (KVBOverspeed == true && KVBPreviousOverspeed == false)
+            if (KVBOverspeed && !KVBPreviousOverspeed)
                 TriggerSoundPenalty1();
             KVBPreviousOverspeed = KVBOverspeed;
 
-            if (KVBEmergencyBraking == true && KVBPreviousEmergencyBraking == false)
+            if (KVBEmergencyBraking && !KVBPreviousEmergencyBraking)
                 TriggerSoundPenalty2();
             KVBPreviousEmergencyBraking = KVBEmergencyBraking;
-
-            if (KVBEmergencyBraking)
-            {
-                if (SpeedMpS() >= 0.1f)
-                    SetEmergency();
-                else
-                {
-                    KVBEmergencyBraking = false;
-                    SetPenaltyApplicationDisplay(false);
-                }
-            }
         }
 
         protected void UpdateTVM300()
@@ -617,27 +622,14 @@ namespace ORTS.Scripting.Script
             SetNextSpeedLimitMpS(TVM300NextSpeedLimitMpS);
             SetCurrentSpeedLimitMpS(TVM300CurrentSpeedLimitMpS);
 
-            if (TVM300EmergencyBraking || SpeedMpS() > TVM300CurrentSpeedLimitMpS + TVM300EmergencySpeedMpS) {
-                TVM300EmergencyBraking = true;
-                SetPenaltyApplicationDisplay(true);
-                SetEmergency();
-            }
-            if (TVM300EmergencyBraking && SpeedMpS() <= TVM300CurrentSpeedLimitMpS)
-            {
-                TVM300EmergencyBraking = false;
-                SetPenaltyApplicationDisplay(false);
-            }
+            if (!TVMCOVITEmergencyBraking && SpeedMpS() > TVM300CurrentSpeedLimitMpS + TVM300EmergencySpeedMpS)
+                TVMCOVITEmergencyBraking = true;
 
-            if (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed)
-                TVMClosedSignal = true;
-            else
-                TVMClosedSignal = false;
+            if (TVMCOVITEmergencyBraking && SpeedMpS() <= TVM300CurrentSpeedLimitMpS)
+                TVMCOVITEmergencyBraking = false;
 
-            if (TVMPreviousAspect > NextSignalAspect(0))
-                TVMOpenedSignal = true;
-            else
-                TVMOpenedSignal = false;
-
+            TVMClosedSignal = (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed);
+            TVMOpenedSignal = (TVMPreviousAspect > NextSignalAspect(0));
             TVMPreviousAspect = NextSignalAspect(0);
         }
 
@@ -699,13 +691,9 @@ namespace ORTS.Scripting.Script
             else
                 TriggerSoundAlert2();
 
-            if ((VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered) && !VACMAEmergencyBraking
-                || SpeedMpS() >= 0.1f && VACMAEmergencyBraking)
-            {
+            if (!VACMAEmergencyBraking && (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
                 VACMAEmergencyBraking = true;
-                SetEmergencyBrake();
-                SetPantographsDown();
-            }
+
             if (VACMAEmergencyBraking && SpeedMpS() < 0.1f)
                 VACMAEmergencyBraking = false;
         }
