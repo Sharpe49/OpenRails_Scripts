@@ -152,6 +152,7 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedEmergencyTimer;
 
     // Other variables
+        bool ExternalEmergencyBraking = false;
         float PreviousSignalDistanceM = 0f;
         bool SignalPassed = false;
 
@@ -276,18 +277,21 @@ namespace ORTS.Scripting.Script
                 }
             }
 
-            SetPenaltyApplicationDisplay(
-                IsBrakeEmergency()
-                || RSOEmergencyBraking
+            SetEmergencyBrake(
+                RSOEmergencyBraking
                 || KVBEmergencyBraking
                 || TVMCOVITEmergencyBraking
                 || VACMAEmergencyBraking
+                || ExternalEmergencyBraking
             );
+
+            SetPenaltyApplicationDisplay(IsBrakeEmergency());
+
             if (RSOEmergencyBraking
                 || KVBEmergencyBraking
                 || TVMCOVITEmergencyBraking
                 || VACMAEmergencyBraking)
-                SetEmergency();
+                SetPantographsDown();
 
             if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
                 TVMPreviousAspect = Aspect.None;
@@ -299,15 +303,9 @@ namespace ORTS.Scripting.Script
             PreviousCCS = ActiveCCS;
         }
 
-        public override void SetEmergency()
+        public override void SetEmergency(bool emergency)
         {
-            SetEmergencyBrake();
-
-            if (RSOEmergencyBraking
-                || KVBEmergencyBraking
-                || TVMCOVITEmergencyBraking
-                || VACMAEmergencyBraking)
-                SetPantographsDown();
+            ExternalEmergencyBraking = emergency;
         }
 
         protected void UpdateRSO()
