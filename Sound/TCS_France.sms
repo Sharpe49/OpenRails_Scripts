@@ -64,7 +64,7 @@ Tr_SMS (
 			Stream (
 				Priority ( 5 )
 				Volume ( 1.0 )
-				Triggers ( 2
+				Triggers ( 4
 					Discrete_Trigger ( 115
 						SetStreamVolume ( 1.0 )
 					)
@@ -85,7 +85,7 @@ Tr_SMS (
 			Stream (
 				Priority ( 5 )
 				Volume ( 1.0 )
-				Triggers ( 2
+				Triggers ( 4
 					Discrete_Trigger ( 117
 						SetStreamVolume ( 1.0 )
 					)
