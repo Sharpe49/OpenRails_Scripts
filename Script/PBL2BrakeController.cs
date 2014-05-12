@@ -276,11 +276,27 @@ namespace ORTS.Scripting.Script
                     Release = true;
                     break;
 
-                case BrakeControllerEvent.SetRDPercent:
+                case BrakeControllerEvent.SetCurrentPercent:
                     if (value != null)
                     {
-                        float newValue = value ?? 0F;
-                        SetRDPercent(newValue);
+                        float percent = value ?? 0F;
+                        percent *= 100;
+
+                        if (percent < 40)
+                        {
+                            Apply = true;
+                            Release = false;
+                        }
+                        else if (percent > 60)
+                        {
+                            Apply = false;
+                            Release = true;
+                        }
+                        else
+                        {
+                            Apply = false;
+                            Release = false;
+                        }
                     }
                     break;
 
@@ -331,27 +347,6 @@ namespace ORTS.Scripting.Script
                 default:
                     return "";
             }
-        }
-
-        private float SetRDPercent(float percent)
-        {
-            if (percent < 40)
-            {
-                Apply = true;
-                Release = false;
-            }
-            else if (percent > 60)
-            {
-                Apply = false;
-                Release = true;
-            }
-            else
-            {
-                Apply = false;
-                Release = false;
-            }
-
-            return CurrentValue() * 100;
         }
 
         private void SetValue(float v)
