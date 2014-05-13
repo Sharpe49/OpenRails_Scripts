@@ -610,12 +610,13 @@ namespace ORTS.Scripting.Script
             TVM300NextSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
             TVM300CurrentSpeedLimitMpS = CurrentSignalSpeedLimitMpS();
 
-            if (TVM300CurrentSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
+            if (TVM300NextSpeedLimitMpS < 0 || TVM300NextSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
+                TVM300NextSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
+
+            if (TVM300CurrentSpeedLimitMpS < 0 || TVM300CurrentSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
                 TVM300CurrentSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
 
-            if (TVM300CurrentSpeedLimitMpS < 0f)
-                TVM300EmergencySpeedMpS = TVM300CurrentSpeedLimitMpS = TVM300NextSpeedLimitMpS;
-            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80f))
+            if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(5f);
             else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(170f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(10f);
