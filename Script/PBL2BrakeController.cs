@@ -69,22 +69,22 @@ namespace ORTS.Scripting.Script
             {
                 switch (notch.Type)
                 {
-                    case MSTSNotchType.Release:
+                    case ControllerState.Release:
                         ReleaseValue = notch.Value;
                         break;
-                    case MSTSNotchType.FullQuickRelease:
+                    case ControllerState.FullQuickRelease:
                         OverchargeValue = notch.Value;
                         QuickReleaseValue = notch.Value;
                         break;
-                    case MSTSNotchType.Lap:
+                    case ControllerState.Lap:
                         LapValue = notch.Value;
                         break;
-                    case MSTSNotchType.Apply:
-                    case MSTSNotchType.GSelfLap:
-                    case MSTSNotchType.GSelfLapH:
+                    case ControllerState.Apply:
+                    case ControllerState.GSelfLap:
+                    case ControllerState.GSelfLapH:
                         ApplyValue = notch.Value;
                         break;
-                    case MSTSNotchType.Emergency:
+                    case ControllerState.Emergency:
                         EmergencyValue = notch.Value;
                         break;
                 }
@@ -315,37 +315,37 @@ namespace ORTS.Scripting.Script
             return true;
         }
 
-        public override string GetStatus()
+        public override ControllerState GetState()
         {
             switch (CurrentState)
             {
                 case State.Overcharge:
-                    return "Overcharge";
+                    return ControllerState.Overcharge;
 
                 case State.QuickRelease:
-                    return "Quick Release";
+                    return ControllerState.FullQuickRelease;
 
                 case State.Release:
-                    return "Release";
+                    return ControllerState.Release;
 
                 case State.Lap:
-                    return "Lap";
+                    return ControllerState.Lap;
 
                 case State.Apply:
-                    return "Apply";
+                    return ControllerState.Apply;
 
                 case State.Emergency:
                     if (EmergencyBrakingPushButton())
-                        return "Emergency Braking Push Button";
+                        return ControllerState.EBPB;
                     else if (TCSEmergencyBraking())
-                        return "TCS Emergency Braking";
+                        return ControllerState.TCSEmergency;
                     else if (TCSFullServiceBraking())
-                        return "TCS Full Service Braking";
+                        return ControllerState.TCSFullServ;
                     else
-                        return "Emergency";
+                        return ControllerState.Emergency;
 
                 default:
-                    return "";
+                    return ControllerState.Dummy;
             }
         }
 
