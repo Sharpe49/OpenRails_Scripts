@@ -652,6 +652,16 @@ namespace ORTS.Scripting.Script
                 case TCSEvent.AlerterReleased:
                     VACMAPressed = false;
                     break;
+
+                case TCSEvent.ThrottleChanged:
+                case TCSEvent.DynamicBrakeChanged:
+                case TCSEvent.HornActivated:
+                    if (VACMAPressedAlertTimer.Started || VACMAPressedEmergencyTimer.Started)
+                    {
+                        VACMAPressedAlertTimer.Start();
+                        VACMAPressedEmergencyTimer.Start();
+                    }
+                    break;
             }
         }
 
