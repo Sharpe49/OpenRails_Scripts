@@ -607,8 +607,48 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM300()
         {
-            TVM300NextSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-            TVM300CurrentSpeedLimitMpS = CurrentSignalSpeedLimitMpS();
+            switch (NextSignalAspect(0))
+            {
+                case Aspect.Stop: // 000
+                    TVM300CurrentSpeedLimitMpS = 160f;
+                    TVM300NextSpeedLimitMpS = 30f;
+                    break;
+
+                case Aspect.StopAndProceed: // 160E
+                    TVM300CurrentSpeedLimitMpS = 160f;
+                    TVM300NextSpeedLimitMpS = 160f;
+                    break;
+
+                case Aspect.Restricted: // 160A
+                    TVM300CurrentSpeedLimitMpS = 220f;
+                    TVM300NextSpeedLimitMpS = 160f;
+                    break;
+
+                case Aspect.Approach_1: // 220E
+                    TVM300CurrentSpeedLimitMpS = 220f;
+                    TVM300NextSpeedLimitMpS = 220f;
+                    break;
+
+                case Aspect.Approach_2: // 220A
+                    TVM300CurrentSpeedLimitMpS = 270f;
+                    TVM300NextSpeedLimitMpS = 220f;
+                    break;
+
+                case Aspect.Approach_3: // 270VL
+                    TVM300CurrentSpeedLimitMpS = 270f;
+                    TVM300NextSpeedLimitMpS = 270f;
+                    break;
+
+                case Aspect.Clear_1: // 270A
+                    TVM300CurrentSpeedLimitMpS = 300f;
+                    TVM300NextSpeedLimitMpS = 270f;
+                    break;
+
+                case Aspect.Clear_2: // 300VL
+                    TVM300CurrentSpeedLimitMpS = 300f;
+                    TVM300NextSpeedLimitMpS = 300f;
+                    break;
+            }
 
             if (TVM300NextSpeedLimitMpS < 0 || TVM300NextSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
                 TVM300NextSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
