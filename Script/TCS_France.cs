@@ -16,6 +16,7 @@
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using ORTS.Common;
 using ORTS.Scripting.Api;
 
@@ -124,6 +125,34 @@ namespace ORTS.Scripting.Script
         bool TVMPreviousOpenedSignal;
 
     // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
+        // Constants
+        Dictionary<Aspect, float> TVM300CurrentSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 300f},
+            {Aspect.Clear_2, 300f},
+            {Aspect.Clear_1, 300f},
+            {Aspect.Approach_3, 270f},
+            {Aspect.Approach_2, 270f},
+            {Aspect.Approach_1, 220f},
+            {Aspect.Restricted, 220f},
+            {Aspect.StopAndProceed, 160f},
+            {Aspect.Stop, 160f},
+            {Aspect.Permission, 30f}
+        };
+        Dictionary<Aspect, float> TVM300NextSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 300f},
+            {Aspect.Clear_2, 300f},
+            {Aspect.Clear_1, 270f},
+            {Aspect.Approach_3, 270f},
+            {Aspect.Approach_2, 220f},
+            {Aspect.Approach_1, 220f},
+            {Aspect.Restricted, 160f},
+            {Aspect.StopAndProceed, 160f},
+            {Aspect.Stop, 30f},
+            {Aspect.Permission, 30f}
+        };
+
         // Parameters
         float TVM300TrainSpeedLimitMpS;
 
@@ -607,58 +636,12 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM300()
         {
-            switch (NextSignalAspect(0))
-            {
-                case Aspect.Stop: // 000
-                    TVM300CurrentSpeedLimitMpS = 160f;
-                    TVM300NextSpeedLimitMpS = 30f;
-                    break;
-
-                case Aspect.StopAndProceed: // 160E
-                    TVM300CurrentSpeedLimitMpS = 160f;
-                    TVM300NextSpeedLimitMpS = 160f;
-                    break;
-
-                case Aspect.Restricted: // 160A
-                    TVM300CurrentSpeedLimitMpS = 220f;
-                    TVM300NextSpeedLimitMpS = 160f;
-                    break;
-
-                case Aspect.Approach_1: // 220E
-                    TVM300CurrentSpeedLimitMpS = 220f;
-                    TVM300NextSpeedLimitMpS = 220f;
-                    break;
-
-                case Aspect.Approach_2: // 220A
-                    TVM300CurrentSpeedLimitMpS = 270f;
-                    TVM300NextSpeedLimitMpS = 220f;
-                    break;
-
-                case Aspect.Approach_3: // 270VL
-                    TVM300CurrentSpeedLimitMpS = 270f;
-                    TVM300NextSpeedLimitMpS = 270f;
-                    break;
-
-                case Aspect.Clear_1: // 270A
-                    TVM300CurrentSpeedLimitMpS = 300f;
-                    TVM300NextSpeedLimitMpS = 270f;
-                    break;
-
-                case Aspect.Clear_2: // 300VL
-                    TVM300CurrentSpeedLimitMpS = 300f;
-                    TVM300NextSpeedLimitMpS = 300f;
-                    break;
-            }
-
-            if (TVM300NextSpeedLimitMpS < 0 || TVM300NextSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
-                TVM300NextSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
-
-            if (TVM300CurrentSpeedLimitMpS < 0 || TVM300CurrentSpeedLimitMpS > TVM300TrainSpeedLimitMpS)
-                TVM300CurrentSpeedLimitMpS = TVM300TrainSpeedLimitMpS;
+            TVM300CurrentSpeedLimitMpS = MpS.FromKpH(TVM300CurrentSpeedLimitsKph[NextSignalAspect(0)]);
+            TVM300NextSpeedLimitMpS = MpS.FromKpH(TVM300NextSpeedLimitsKph[NextSignalAspect(0)]);
 
             if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(5f);
-            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(170f))
+            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(160f))
                 TVM300EmergencySpeedMpS = MpS.FromKpH(10f);
             else
                 TVM300EmergencySpeedMpS = MpS.FromKpH(15f);
