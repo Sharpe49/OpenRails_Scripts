@@ -51,7 +51,8 @@ EN :
 This script reproduces the behaviour of the PBL2 brake controller.
 To install it, put the PBL2BrakeController.cs file in the Script folder of your locomotive (create it if needed).
 In your ENG file, in the Engine section, write this parameter :
-- ORTSBrakeController( PBL2BrakeController.cs )
+- ORTSTrainBrakeController( PBL2BrakeController.cs )
+- ORTSEngineBrakeController( PBL2BrakeController.cs )
 
 The brake controller should work now.
 
@@ -59,6 +60,7 @@ FR :
 Ceci est un script pour Open Rails permettant de reproduire le comportement du robinet de freinage PBL2.
 Pour l'installer, mettez le fichier PBL2BrakeController.cs dans le dossier Script de votre locomotive (créez le si nécessaire).
 Dans votre fichier ENG, dans la section Engine, écrivez ces paramètres :
-- ORTSBrakeController( PBL2BrakeController.cs )
+- ORTSTrainBrakeController( PBL2BrakeController.cs )
+- ORTSEngineBrakeController( PBL2BrakeController.cs )
 
 Le robinet de frein devrait fonctionner désormais.
