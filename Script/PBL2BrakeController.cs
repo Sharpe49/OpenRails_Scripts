@@ -349,6 +349,11 @@ namespace ORTS.Scripting.Script
             }
         }
 
+        public override float? GetStateFraction()
+        {
+            return null;
+        }
+
         private void SetValue(float v)
         {
             SetCurrentValue(v);
