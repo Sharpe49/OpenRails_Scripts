@@ -51,7 +51,7 @@ namespace ORTS.Scripting.Script
         bool DAATPresent;                                   // DAAT
         bool KVBPresent;                                    // KVB
         bool TVM300Present;                                 // TVM300
-        bool TVM430Present;                                 // TVM430 (Not implemented)
+        bool TVM430Present;                                 // TVM430
         bool ETCSPresent;                                   // ETCS (Not implemented)
         ETCSLevel ETCSMaxLevel = ETCSLevel.L0;              // ETCS maximum level (Not implemented)
         bool ElectroPneumaticBrake;                         // EP
@@ -162,7 +162,75 @@ namespace ORTS.Scripting.Script
         float TVM300EmergencySpeedMpS;
 
     // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
-        // Not implemented
+        // Constants
+        // TVM430 300 km/h
+        Dictionary<Aspect, float> TVM430S300CurrentSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 300f},
+            {Aspect.Clear_2, 300f},
+            {Aspect.Clear_1, 300f},
+            {Aspect.Approach_3, 270f},
+            {Aspect.Approach_2, 230f},
+            {Aspect.Approach_1, 230f},
+            {Aspect.Restricted, 170f},
+            {Aspect.StopAndProceed, 170f},
+            {Aspect.Stop, 170f},
+            {Aspect.Permission, 30f}
+        };
+        Dictionary<Aspect, float> TVM430S300NextSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 300f},
+            {Aspect.Clear_2, 300f},
+            {Aspect.Clear_1, 270f},
+            {Aspect.Approach_3, 230f},
+            {Aspect.Approach_2, 170f},
+            {Aspect.Approach_1, 160f},
+            {Aspect.Restricted, 80f},
+            {Aspect.StopAndProceed, 30f},
+            {Aspect.Stop, 0f},
+            {Aspect.Permission, 30f}
+        };
+
+        // TVM430 320 km/h
+        Dictionary<Aspect, float> TVM430S320CurrentSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 320f},
+            {Aspect.Clear_2, 320f},
+            {Aspect.Clear_1, 320f},
+            {Aspect.Approach_3, 300f},
+            {Aspect.Approach_2, 270f},
+            {Aspect.Approach_1, 230f},
+            {Aspect.Restricted, 170f},
+            {Aspect.StopAndProceed, 170f},
+            {Aspect.Stop, 170f},
+            {Aspect.Permission, 30f}
+        };
+        Dictionary<Aspect, float> TVM430S320NextSpeedLimitsKph = new Dictionary<Aspect, float>
+        {
+            {Aspect.None, 320f},
+            {Aspect.Clear_2, 320f},
+            {Aspect.Clear_1, 300f},
+            {Aspect.Approach_3, 270f},
+            {Aspect.Approach_2, 230f},
+            {Aspect.Approach_1, 170f},
+            {Aspect.Restricted, 80f},
+            {Aspect.StopAndProceed, 30f},
+            {Aspect.Stop, 0f},
+            {Aspect.Permission, 30f}
+        };
+
+        // Parameters
+        float TVM430TrainSpeedLimitMpS;
+
+        // Variables
+        float TVM430CurrentSpeedLimitMpS;
+        float TVM430CurrentEmergencySpeedMpS;
+        float TVM430NextSpeedLimitMpS;
+        float TVM430NextEmergencySpeedMpS;
+        float TVM430EmergencyDecelerationMpS2;
+        float TVM430ResetDecelerationMpS2;
+        float TVM430EmergencySpeedCurveMpS;
+        float TVM430ResetSpeedCurveMpS;
 
     // Vigilance monitoring (VACMA)
         // Parameters
@@ -208,6 +276,9 @@ namespace ORTS.Scripting.Script
 
             // TVM300 section
             TVM300TrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("TVM300", "TrainSpeedLimitKpH", 300f));
+
+            // TVM430 section
+            TVM430TrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("TVM430", "TrainSpeedLimitKpH", 320f));
 
             // VACMA section
             VACMAActivationSpeedMpS = MpS.FromKpH(GetFloatParameter("VACMA", "ActivationSpeedKpH", 3f));
@@ -294,6 +365,16 @@ namespace ORTS.Scripting.Script
                     UpdateRSO();
                     UpdateVACMA();
                 }
+                else if (TVM430Present)
+                {
+                    ActiveCCS = CCS.TVM430;
+
+                    SetNextSignalAspect(NextSignalAspect(0));
+
+                    UpdateTVM430();
+                    UpdateRSO();
+                    UpdateVACMA();
+                }
                 else
                 {
                     // TVM not activated because not present
@@ -325,7 +406,7 @@ namespace ORTS.Scripting.Script
             if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
                 TVMPreviousAspect = Aspect.None;
 
-            RSOType1Inhibition = false; // No function for reverse
+            RSOType1Inhibition = IsDirectionReverse();
             RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
             RSOType3Inhibition = (TVM300Present || TVM430Present) && !TVMCOVITInhibited;
 
@@ -639,15 +720,10 @@ namespace ORTS.Scripting.Script
             TVM300CurrentSpeedLimitMpS = MpS.FromKpH(TVM300CurrentSpeedLimitsKph[NextSignalAspect(0)]);
             TVM300NextSpeedLimitMpS = MpS.FromKpH(TVM300NextSpeedLimitsKph[NextSignalAspect(0)]);
 
-            if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(80f))
-                TVM300EmergencySpeedMpS = MpS.FromKpH(5f);
-            else if (TVM300CurrentSpeedLimitMpS <= MpS.FromKpH(160f))
-                TVM300EmergencySpeedMpS = MpS.FromKpH(10f);
-            else
-                TVM300EmergencySpeedMpS = MpS.FromKpH(15f);
-
             SetNextSpeedLimitMpS(TVM300NextSpeedLimitMpS);
             SetCurrentSpeedLimitMpS(TVM300CurrentSpeedLimitMpS);
+
+            TVM300EmergencySpeedMpS = TVM300GetEmergencySpeed(TVM300CurrentSpeedLimitMpS);
 
             if (!TVMCOVITEmergencyBraking && SpeedMpS() > TVM300CurrentSpeedLimitMpS + TVM300EmergencySpeedMpS)
                 TVMCOVITEmergencyBraking = true;
@@ -662,6 +738,93 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM430()
         {
+            if (TVM430TrainSpeedLimitMpS == MpS.FromKpH(320f))
+            {
+                TVM430CurrentSpeedLimitMpS = MpS.FromKpH(TVM430S320CurrentSpeedLimitsKph[NextSignalAspect(0)]);
+                TVM430NextSpeedLimitMpS = MpS.FromKpH(TVM430S320NextSpeedLimitsKph[NextSignalAspect(0)]);
+            }
+            else
+            {
+                TVM430CurrentSpeedLimitMpS = MpS.FromKpH(TVM430S300CurrentSpeedLimitsKph[NextSignalAspect(0)]);
+                TVM430NextSpeedLimitMpS = MpS.FromKpH(TVM430S300NextSpeedLimitsKph[NextSignalAspect(0)]);
+            }
+
+            SetNextSpeedLimitMpS(TVM430NextSpeedLimitMpS);
+            SetCurrentSpeedLimitMpS(TVM430CurrentSpeedLimitMpS);
+
+            TVM430CurrentEmergencySpeedMpS = TVM430GetEmergencySpeed(TVM430CurrentSpeedLimitMpS);
+            TVM430NextEmergencySpeedMpS = TVM430GetEmergencySpeed(TVM430NextSpeedLimitMpS);
+
+            if (SignalPassed)
+            {
+                TVM430EmergencyDecelerationMpS2 = Deceleration(
+                    TVM430CurrentSpeedLimitMpS + TVM430CurrentEmergencySpeedMpS,
+                    TVM430NextSpeedLimitMpS + TVM430NextEmergencySpeedMpS,
+                    NextSignalDistanceM(0)
+                );
+
+                TVM430ResetDecelerationMpS2 = Deceleration(
+                    TVM430CurrentSpeedLimitMpS,
+                    TVM430NextSpeedLimitMpS,
+                    NextSignalDistanceM(0)
+                );
+            }
+
+            TVM430EmergencySpeedCurveMpS = SpeedCurve(
+                NextSignalDistanceM(0),
+                TVM430NextSpeedLimitMpS + TVM430NextEmergencySpeedMpS,
+                0,
+                0,
+                TVM430EmergencyDecelerationMpS2
+            );
+
+            TVM430ResetSpeedCurveMpS = SpeedCurve(
+                NextSignalDistanceM(0),
+                TVM430NextSpeedLimitMpS,
+                0,
+                0,
+                TVM430ResetDecelerationMpS2
+            );
+
+            if (!TVMCOVITEmergencyBraking && SpeedMpS() > TVM430EmergencySpeedCurveMpS)
+                TVMCOVITEmergencyBraking = true;
+
+            if (TVMCOVITEmergencyBraking && SpeedMpS() <= TVM430ResetSpeedCurveMpS)
+                TVMCOVITEmergencyBraking = false;
+
+            TVMClosedSignal = (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed);
+            TVMOpenedSignal = (TVMPreviousAspect > NextSignalAspect(0));
+            TVMPreviousAspect = NextSignalAspect(0);
+        }
+
+        private float TVM300GetEmergencySpeed(float speedLimit)
+        {
+            float emergencySpeed = 0f;
+
+            if (speedLimit <= MpS.FromKpH(80f))
+                emergencySpeed = MpS.FromKpH(5f);
+            else if (speedLimit <= MpS.FromKpH(160f))
+                emergencySpeed = MpS.FromKpH(10f);
+            else
+                emergencySpeed = MpS.FromKpH(15f);
+
+            return emergencySpeed;
+        }
+
+        private float TVM430GetEmergencySpeed(float speedLimit)
+        {
+            float emergencySpeed = 0f;
+
+            if (speedLimit <= MpS.FromKpH(80f))
+                emergencySpeed = MpS.FromKpH(5f);
+            else if (speedLimit <= MpS.FromKpH(170f))
+                emergencySpeed = MpS.FromKpH(10f);
+            else if (speedLimit <= MpS.FromKpH(270f))
+                emergencySpeed = MpS.FromKpH(15f);
+            else
+                emergencySpeed = MpS.FromKpH(20f);
+
+            return emergencySpeed;
         }
 
         public override void HandleEvent(TCSEvent evt, string message)
