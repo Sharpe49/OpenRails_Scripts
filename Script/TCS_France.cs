@@ -397,11 +397,11 @@ namespace ORTS.Scripting.Script
 
             SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
-            if (RSOEmergencyBraking
-                || KVBEmergencyBraking
-                || TVMCOVITEmergencyBraking
-                || VACMAEmergencyBraking)
-                SetPantographsDown();
+            SetPowerAuthorization(!RSOEmergencyBraking
+                && !KVBEmergencyBraking
+                && !TVMCOVITEmergencyBraking
+                && !VACMAEmergencyBraking
+            );
 
             if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
                 TVMPreviousAspect = Aspect.None;
