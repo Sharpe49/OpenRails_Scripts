@@ -91,6 +91,10 @@ namespace ORTS.Scripting.Script
             }
         }
 
+        public override void InitializeMoving()
+        {
+        }
+
         public override float Update(float elapsedSeconds)
         {
             if (Apply)
