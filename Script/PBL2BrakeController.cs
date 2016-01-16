@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using ORTS.Scripting.Api;
+using Orts.Simulation.RollingStocks.SubSystems.Controllers;
 
 namespace ORTS.Scripting.Script
 {
