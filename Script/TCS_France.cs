@@ -320,97 +320,100 @@ namespace ORTS.Scripting.Script
         {
             UpdateSignalPassed();
 
-            if (!KVBPresent && !DAATPresent)
+            if (IsTrainControlEnabled())
             {
-                ActiveCCS = CCS.RSO;
-
-                SetNextSignalAspect(Aspect.Clear_1);
-
-                UpdateRSO();
-                UpdateVACMA();
-            }
-            else if (!KVBPresent && DAATPresent)
-            {
-                ActiveCCS = CCS.DAAT;
-
-                SetNextSignalAspect(Aspect.Clear_1);
-
-                UpdateRSO();
-                UpdateVACMA();
-            }
-            else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
-            {
-                // Classic line = KVB active
-                ActiveCCS = CCS.KVB;
-
-                if (SignalPassed)
-                    SetNextSignalAspect(NextSignalAspect(0));
-
-                UpdateKVB();
-                UpdateRSO();
-                UpdateVACMA();
-            }
-            else
-            {
-                // High speed line = TVM active
-
-                // Activation control (KAr) in KVB system
-                if (TVM300Present)
+                if (!KVBPresent && !DAATPresent)
                 {
-                    ActiveCCS = CCS.TVM300;
+                    ActiveCCS = CCS.RSO;
 
-                    SetNextSignalAspect(NextSignalAspect(0));
+                    SetNextSignalAspect(Aspect.Clear_1);
 
-                    UpdateTVM300();
                     UpdateRSO();
                     UpdateVACMA();
                 }
-                else if (TVM430Present)
+                else if (!KVBPresent && DAATPresent)
                 {
-                    ActiveCCS = CCS.TVM430;
+                    ActiveCCS = CCS.DAAT;
 
-                    SetNextSignalAspect(NextSignalAspect(0));
+                    SetNextSignalAspect(Aspect.Clear_1);
 
-                    UpdateTVM430();
                     UpdateRSO();
                     UpdateVACMA();
                 }
-                else
+                else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
                 {
-                    // TVM not activated because not present
+                    // Classic line = KVB active
                     ActiveCCS = CCS.KVB;
 
                     if (SignalPassed)
                         SetNextSignalAspect(NextSignalAspect(0));
 
-                    KVBEmergencyBraking = true;
+                    UpdateKVB();
+                    UpdateRSO();
+                    UpdateVACMA();
                 }
+                else
+                {
+                    // High speed line = TVM active
+
+                    // Activation control (KAr) in KVB system
+                    if (TVM300Present)
+                    {
+                        ActiveCCS = CCS.TVM300;
+
+                        SetNextSignalAspect(NextSignalAspect(0));
+
+                        UpdateTVM300();
+                        UpdateRSO();
+                        UpdateVACMA();
+                    }
+                    else if (TVM430Present)
+                    {
+                        ActiveCCS = CCS.TVM430;
+
+                        SetNextSignalAspect(NextSignalAspect(0));
+
+                        UpdateTVM430();
+                        UpdateRSO();
+                        UpdateVACMA();
+                    }
+                    else
+                    {
+                        // TVM not activated because not present
+                        ActiveCCS = CCS.KVB;
+
+                        if (SignalPassed)
+                            SetNextSignalAspect(NextSignalAspect(0));
+
+                        KVBEmergencyBraking = true;
+                    }
+                }
+
+                SetEmergencyBrake(
+                    RSOEmergencyBraking
+                    || KVBEmergencyBraking
+                    || TVMCOVITEmergencyBraking
+                    || VACMAEmergencyBraking
+                    || ExternalEmergencyBraking
+                );
+
+                SetPenaltyApplicationDisplay(IsBrakeEmergency());
+
+                SetPowerAuthorization(!RSOEmergencyBraking
+                    && !KVBEmergencyBraking
+                    && !TVMCOVITEmergencyBraking
+                    && !VACMAEmergencyBraking
+                );
+
+                if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
+                    TVMPreviousAspect = Aspect.None;
+
+                RSOType1Inhibition = IsDirectionReverse();
+                RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
+                RSOType3Inhibition = (TVM300Present || TVM430Present) && !TVMCOVITInhibited;
+
+                PreviousCCS = ActiveCCS;
             }
-
-            SetEmergencyBrake(
-                RSOEmergencyBraking
-                || KVBEmergencyBraking
-                || TVMCOVITEmergencyBraking
-                || VACMAEmergencyBraking
-                || ExternalEmergencyBraking
-            );
-
-            SetPenaltyApplicationDisplay(IsBrakeEmergency());
-
-            SetPowerAuthorization(!RSOEmergencyBraking
-                && !KVBEmergencyBraking
-                && !TVMCOVITEmergencyBraking
-                && !VACMAEmergencyBraking
-            );
-
-            if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
-                TVMPreviousAspect = Aspect.None;
-
-            RSOType1Inhibition = IsDirectionReverse();
-            RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
-            RSOType3Inhibition = (TVM300Present || TVM430Present) && !TVMCOVITInhibited;
-
-            PreviousCCS = ActiveCCS;
         }
 
         public override void SetEmergency(bool emergency)
