@@ -118,6 +118,7 @@ namespace ORTS.Scripting.Script
         // Variables
         bool TVMCOVITEmergencyBraking = false;
 
+        Aspect TVMAspect;
         Aspect TVMPreviousAspect;
         bool TVMClosedSignal;
         bool TVMPreviousClosedSignal;
@@ -223,6 +224,7 @@ namespace ORTS.Scripting.Script
         float TVM430TrainSpeedLimitMpS;
 
         // Variables
+        Timer TVM430AspectChangeTimer;
         float TVM430CurrentSpeedLimitMpS;
         float TVM430CurrentEmergencySpeedMpS;
         float TVM430NextSpeedLimitMpS;
@@ -312,6 +314,8 @@ namespace ORTS.Scripting.Script
             VACMAReleasedEmergencyTimer = new Timer(this);
             VACMAReleasedEmergencyTimer.Setup(VACMAReleasedEmergencyDelayS);
 
+            TVM430AspectChangeTimer = new Timer(this);
+            TVM430AspectChangeTimer.Setup(4.7f);
             Activated = true;
             PreviousSignalDistanceM = 0f;
         }
@@ -361,9 +365,8 @@ namespace ORTS.Scripting.Script
                     {
                         ActiveCCS = CCS.TVM300;
 
-                        SetNextSignalAspect(NextSignalAspect(0));
-
-                        UpdateTVM300();
+                        UpdateTVM300Display();
+                        UpdateTVM300COVIT();
                         UpdateRSO();
                         UpdateVACMA();
                     }
@@ -371,9 +374,8 @@ namespace ORTS.Scripting.Script
                     {
                         ActiveCCS = CCS.TVM430;
 
-                        SetNextSignalAspect(NextSignalAspect(0));
-
-                        UpdateTVM430();
+                        UpdateTVM430Display();
+                        UpdateTVM430COVIT();
                         UpdateRSO();
                         UpdateVACMA();
                     }
@@ -406,7 +408,10 @@ namespace ORTS.Scripting.Script
                 );
 
                 if (ActiveCCS != CCS.TVM300 && ActiveCCS != CCS.TVM430)
+                {
+                    TVMAspect = Aspect.None;
                     TVMPreviousAspect = Aspect.None;
+                }
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present && ActiveCCS == CCS.TVM300) || (TVM430Present && ActiveCCS == CCS.TVM430));
@@ -718,7 +723,49 @@ namespace ORTS.Scripting.Script
             KVBPreviousEmergencyBraking = KVBEmergencyBraking;
         }
 
-        protected void UpdateTVM300()
+        protected void UpdateTVM300Display()
+        {
+            UpdateTVMAspect(NextSignalAspect(0));
+        }
+
+        protected void UpdateTVM430Display()
+        {
+            if (NextSignalAspect(0) != TVMAspect)
+            {
+                if (!TVM430AspectChangeTimer.Started)
+                {
+                    TVM430AspectChangeTimer.Start();
+                }
+                else
+                {
+                    if (TVM430AspectChangeTimer.Triggered)
+                    {
+                        UpdateTVMAspect(NextSignalAspect(0));
+
+                        TVM430AspectChangeTimer.Stop();
+                    }
+                }
+            }
+            else
+            {
+                UpdateTVMAspect(NextSignalAspect(0));
+            }
+        }
+
+        protected void UpdateTVMAspect(Aspect aspect)
+        {
+            TVMPreviousAspect = TVMAspect;
+            TVMAspect = aspect;
+            SetNextSignalAspect(aspect);
+
+            if (TVMAspect != Aspect.None && TVMPreviousAspect != Aspect.None)
+            {
+                TVMClosedSignal = (TVMPreviousAspect < TVMAspect);
+                TVMOpenedSignal = (TVMPreviousAspect > TVMAspect);
+            }
+        }
+
+        protected void UpdateTVM300COVIT()
         {
             TVM300CurrentSpeedLimitMpS = MpS.FromKpH(TVM300CurrentSpeedLimitsKph[NextSignalAspect(0)]);
             TVM300NextSpeedLimitMpS = MpS.FromKpH(TVM300NextSpeedLimitsKph[NextSignalAspect(0)]);
@@ -733,13 +780,9 @@ namespace ORTS.Scripting.Script
 
             if (TVMCOVITEmergencyBraking && SpeedMpS() <= TVM300CurrentSpeedLimitMpS)
                 TVMCOVITEmergencyBraking = false;
-
-            TVMClosedSignal = (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed);
-            TVMOpenedSignal = (TVMPreviousAspect > NextSignalAspect(0));
-            TVMPreviousAspect = NextSignalAspect(0);
         }
 
-        protected void UpdateTVM430()
+        protected void UpdateTVM430COVIT()
         {
             if (TVM430TrainSpeedLimitMpS == MpS.FromKpH(320f))
             {
@@ -794,10 +837,6 @@ namespace ORTS.Scripting.Script
 
             if (TVMCOVITEmergencyBraking && SpeedMpS() <= TVM430ResetSpeedCurveMpS)
                 TVMCOVITEmergencyBraking = false;
-
-            TVMClosedSignal = (TVMPreviousAspect < NextSignalAspect(0) && SignalPassed);
-            TVMOpenedSignal = (TVMPreviousAspect > NextSignalAspect(0));
-            TVMPreviousAspect = NextSignalAspect(0);
         }
 
         private float TVM300GetEmergencySpeed(float speedLimit)
