@@ -67,6 +67,13 @@ namespace ORTS.Scripting.Script
                         SetCurrentState(CircuitBreakerState.Open);
                     }
                     break;
+
+                case CircuitBreakerState.Open:
+                    if (ClosingAuthorization() && DriverClosingOrder())
+                    {
+                        SetCurrentState(CircuitBreakerState.Closing);
+                    }
+                    break;
             }
         }
 
@@ -74,12 +81,8 @@ namespace ORTS.Scripting.Script
         {
             switch (evt)
             {
-                case PowerSupplyEvent.CloseCircuitBreaker:
+                case PowerSupplyEvent.CloseCircuitBreakerButtonPressed:
                     SetDriverClosingOrder(true);
-                    if (ClosingAuthorization() && CurrentState() == CircuitBreakerState.Open)
-                    {
-                        SetCurrentState(CircuitBreakerState.Closing);
-                    }
 
                     Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
                     if (!ClosingAuthorization())
@@ -88,7 +91,7 @@ namespace ORTS.Scripting.Script
                     }
                     break;
 
-                case PowerSupplyEvent.OpenCircuitBreaker:
+                case PowerSupplyEvent.CloseCircuitBreakerButtonReleased:
                     SetDriverClosingOrder(false);
                     break;
 
