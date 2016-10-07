@@ -17,7 +17,7 @@
 
 using System;
 using ORTS;
-using ORTS.Common;
+using Orts.Common;
 using ORTS.Scripting.Api;
 using Orts.Simulation;
 
@@ -83,7 +83,7 @@ namespace ORTS.Scripting.Script
             {
                 case PowerSupplyEvent.CloseCircuitBreakerButtonPressed:
                     SetDriverClosingOrder(true);
-
+                    SignalEvent(Event.CircuitBreakerClosingOrderOn);
                     Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
                     if (!ClosingAuthorization())
                     {
@@ -93,17 +93,18 @@ namespace ORTS.Scripting.Script
 
                 case PowerSupplyEvent.CloseCircuitBreakerButtonReleased:
                     SetDriverClosingOrder(false);
+                    SignalEvent(Event.CircuitBreakerClosingOrderOff);
                     break;
 
                 case PowerSupplyEvent.GiveCircuitBreakerClosingAuthorization:
                     SetDriverClosingAuthorization(true);
-
+                    SignalEvent(Event.CircuitBreakerClosingAuthorizationOn);
                     Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.On);
                     break;
 
                 case PowerSupplyEvent.RemoveCircuitBreakerClosingAuthorization:
                     SetDriverClosingAuthorization(false);
-
+                    SignalEvent(Event.CircuitBreakerClosingAuthorizationOff);
                     Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.Off);
                     break;
             }
