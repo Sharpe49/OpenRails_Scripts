@@ -27,6 +27,7 @@ namespace ORTS.Scripting.Script
     public class SNCFCircuitBreaker : CircuitBreaker
     {
         private Timer ClosingTimer;
+        private CircuitBreakerState PreviousState;
 
         public override void Initialize()
         {
@@ -75,6 +76,26 @@ namespace ORTS.Scripting.Script
                     }
                     break;
             }
+
+            if (PreviousState != CurrentState())
+            {
+                switch (CurrentState())
+                {
+                    case CircuitBreakerState.Open:
+                        SignalEvent(Event.CircuitBreakerOpen);
+                        break;
+
+                    case CircuitBreakerState.Closing:
+                        SignalEvent(Event.CircuitBreakerClosing);
+                        break;
+
+                    case CircuitBreakerState.Closed:
+                        SignalEvent(Event.CircuitBreakerClosed);
+                        break;
+                }
+            }
+
+            PreviousState = CurrentState();
         }
 
         public override void HandleEvent(PowerSupplyEvent evt)
