@@ -48,6 +48,8 @@ namespace ORTS.Scripting.Script
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
     // Train parameters
+        bool VACMAPresent;                                  // VACMA
+        bool RSOPresent;                                    // RSO
         bool DAATPresent;                                   // DAAT
         bool KVBPresent;                                    // KVB
         bool TVM300Present;                                 // TVM300
@@ -58,7 +60,7 @@ namespace ORTS.Scripting.Script
         bool HeavyFreightTrain;                             // MA train only
         float SafeDecelerationMpS2;                         // Gamma
 
-    // RSO (Répétition Optique des Signaux / Optical Signal Repetition)
+    // RSO (RÃ©pÃ©tition Optique des Signaux / Optical Signal Repetition)
         // Parameters
         const float RSODelayBeforeEmergencyBrakingS = 4f;
 
@@ -72,10 +74,10 @@ namespace ORTS.Scripting.Script
         bool RSOOpenedSignal = false;
         bool RSOPreviousOpenedSignal = false;
 
-    // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
+    // DAAT (Dispositif d'ArrÃªt Automatique des Trains / Automatic Train Stop System)
         // Not implemented
 
-    // KVB (Contrôle de Vitesse par Balises / Beacon speed control)
+    // KVB (ContrÃ´le de Vitesse par Balises / Beacon speed control)
         // Parameters
         bool KVBInhibited;
         const float KVBDelayBeforeEmergencyBrakingS = 5f;   // Tx
@@ -116,6 +118,7 @@ namespace ORTS.Scripting.Script
         bool TVMCOVITInhibited = false;
 
         // Variables
+        bool TVMArmed = false;
         bool TVMCOVITEmergencyBraking = false;
 
         Aspect TVMAspect;
@@ -125,7 +128,7 @@ namespace ORTS.Scripting.Script
         bool TVMOpenedSignal;
         bool TVMPreviousOpenedSignal;
 
-    // TVM300 COVIT (Transmission Voie Machine 300 COntrôle de VITesse / Track Machine Transmission 300 Speed control)
+    // TVM300 COVIT (Transmission Voie Machine 300 COntrÃ´le de VITesse / Track Machine Transmission 300 Speed control)
         // Constants
         Dictionary<Aspect, float> TVM300CurrentSpeedLimitsKph = new Dictionary<Aspect, float>
         {
@@ -162,7 +165,7 @@ namespace ORTS.Scripting.Script
         float TVM300NextSpeedLimitMpS;
         float TVM300EmergencySpeedMpS;
 
-    // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
+    // TVM430 COVIT (Transmission Voie Machine 430 COntrÃ´le de VITesse / Track Machine Transmission 430 Speed control)
         // Constants
         // TVM430 300 km/h
         Dictionary<Aspect, float> TVM430S300CurrentSpeedLimitsKph = new Dictionary<Aspect, float>
@@ -260,6 +263,8 @@ namespace ORTS.Scripting.Script
         public override void Initialize()
         {
             // General section
+            VACMAPresent = GetBoolParameter("General", "VACMAPresent", true);
+            RSOPresent = GetBoolParameter("General", "RSOPresent", true);
             DAATPresent = GetBoolParameter("General", "DAATPresent", false);
             KVBPresent = GetBoolParameter("General", "KVBPresent", false);
             TVM300Present = GetBoolParameter("General", "TVM300Present", false);
@@ -324,25 +329,30 @@ namespace ORTS.Scripting.Script
         {
             UpdateSignalPassed();
 
+            if (IsAlerterEnabled() && VACMAPresent)
+            {
+                UpdateVACMA();
+            }
+
             if (IsTrainControlEnabled())
             {
-                if (!KVBPresent && !DAATPresent)
+                if (RSOPresent)
                 {
-                    ActiveCCS = CCS.RSO;
-
-                    SetNextSignalAspect(Aspect.Clear_1);
-
                     UpdateRSO();
-                    UpdateVACMA();
                 }
-                else if (!KVBPresent && DAATPresent)
+
+                if (!KVBPresent)
                 {
-                    ActiveCCS = CCS.DAAT;
+                    if (!DAATPresent)
+                    {
+                        ActiveCCS = CCS.RSO;
+                    }
+                    else
+                    {
+                        ActiveCCS = CCS.DAAT;
+                    }
 
                     SetNextSignalAspect(Aspect.Clear_1);
-
-                    UpdateRSO();
-                    UpdateVACMA();
                 }
                 else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
                 {
@@ -353,10 +363,8 @@ namespace ORTS.Scripting.Script
                         SetNextSignalAspect(NextSignalAspect(0));
 
                     UpdateKVB();
-                    UpdateRSO();
-                    UpdateVACMA();
                 }
-                else
+                else if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f))
                 {
                     // High speed line = TVM active
 
@@ -367,8 +375,6 @@ namespace ORTS.Scripting.Script
 
                         UpdateTVM300Display();
                         UpdateTVM300COVIT();
-                        UpdateRSO();
-                        UpdateVACMA();
                     }
                     else if (TVM430Present)
                     {
@@ -376,10 +382,8 @@ namespace ORTS.Scripting.Script
 
                         UpdateTVM430Display();
                         UpdateTVM430COVIT();
-                        UpdateRSO();
-                        UpdateVACMA();
                     }
-                    else
+                    else if (KVBPresent)
                     {
                         // TVM not activated because not present
                         ActiveCCS = CCS.KVB;
