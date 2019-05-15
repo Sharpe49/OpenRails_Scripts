@@ -341,30 +341,33 @@ namespace ORTS.Scripting.Script
                     UpdateRSO();
                 }
 
-                if (!KVBPresent)
+                if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f))
                 {
-                    if (!DAATPresent)
+                    if (KVBPresent)
                     {
-                        ActiveCCS = CCS.RSO;
+                        // Classic line = KVB active
+                        ActiveCCS = CCS.KVB;
+
+                        if (SignalPassed)
+                            SetNextSignalAspect(NextSignalAspect(0));
+
+                        UpdateKVB();
                     }
                     else
                     {
-                        ActiveCCS = CCS.DAAT;
+                        if (!DAATPresent)
+                        {
+                            ActiveCCS = CCS.RSO;
+                        }
+                        else
+                        {
+                            ActiveCCS = CCS.DAAT;
+                        }
+
+                        SetNextSignalAspect(Aspect.Clear_1);
                     }
-
-                    SetNextSignalAspect(Aspect.Clear_1);
                 }
-                else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && KVBPresent)
-                {
-                    // Classic line = KVB active
-                    ActiveCCS = CCS.KVB;
-
-                    if (SignalPassed)
-                        SetNextSignalAspect(NextSignalAspect(0));
-
-                    UpdateKVB();
-                }
-                else if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f))
+                else
                 {
                     // High speed line = TVM active
 
