@@ -1,0 +1,93 @@
+SIMISA@@@@@@@@@@JINX0x1t______
+
+Tr_SMS (
+	ScalabiltyGroup( 3
+		Activation (
+			CabCam ()
+			ExternalCam ()
+			Distance (100)
+		)
+		Deactivation (
+			PassengerCam ()
+			Distance (100)
+		)
+		Stereo ()
+		Streams ( 4
+			Stream (
+				Priority ( 5 )
+				Volume ( 3.0 )
+				Triggers ( 4
+					Discrete_Trigger ( 113
+						SetStreamVolume ( 3.0 )
+					)
+					Discrete_Trigger ( 113
+						StartLoopRelease ( 1
+							File ( "rs-tut.wav" -1 )
+							SelectionMethod ( SequentialSelection )
+						)
+					)
+					Discrete_Trigger ( 114
+						SetStreamVolume ( 0.0 )
+					)
+					Discrete_Trigger ( 114
+						ReleaseLoopReleaseWithJump ()
+					)
+				)
+			)
+			Stream (
+				Priority ( 5 )
+				Volume ( 6.0 )
+				Triggers ( 1
+					Discrete_Trigger ( 109
+						PlayOneShot ( 1
+							File ( "rs-ding.wav" -1 )
+							SelectionMethod ( SequentialSelection )
+						)
+					)
+				)
+			)
+			Stream (
+				Priority ( 5 )
+				Volume ( 4.0 )
+				Triggers ( 4
+					Discrete_Trigger ( 115
+						SetStreamVolume ( 4.0 )
+					)
+					Discrete_Trigger ( 115
+						StartLoopRelease ( 1
+							File ( "vacma-klaxon.wav" -1 )
+							SelectionMethod ( SequentialSelection )
+						)
+					)
+					Discrete_Trigger ( 116
+						SetStreamVolume ( 0.0 )
+					)
+					Discrete_Trigger ( 116
+						ReleaseLoopReleaseWithJump ()
+					)
+				)
+			)
+			Stream (
+				Priority ( 5 )
+				Volume ( 4.0 )
+				Triggers ( 4
+					Discrete_Trigger ( 117
+						SetStreamVolume ( 4.0 )
+					)
+					Discrete_Trigger ( 117
+						StartLoopRelease ( 1
+							File ( "vacma-sonnette.wav" -1 )
+							SelectionMethod ( SequentialSelection )
+						)
+					)
+					Discrete_Trigger ( 118
+						SetStreamVolume ( 0.0 )
+					)
+					Discrete_Trigger ( 118
+						ReleaseLoopReleaseWithJump ()
+					)
+				)
+			)
+		)
+	)
+)
