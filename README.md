@@ -39,6 +39,40 @@ ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI fil
 
 Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE et W.
 
+## Old_TCS_France
+
+EN :
+This is a script for Open Rails that reproduces the behaviour of the French Train Control Systems for older trains (without KVB).
+The systems that will be available are :
+- RS : Répétition des Signaux (Signal Repetition)
+- DAAT : Dispositif d'Arrêt Automatique des Trains (Automatic Train Stop System)
+- TVM 300 : Transmission Voie Machine (Track to Machine Transmission)
+
+If you need different sounds, put the SMS file and the WAV files in the Sound folder of your locomotive.
+Using the existing INI files, you can write your own parameters file if your train is different.
+To activate the script, in your ENG file, in the Engine section, write these parameters:  
+ORTSTrainControlSystem( "..\\..\\common.script\\Old_TCS_France.cs" )  
+ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.sms" )  
+ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
+
+Advice : In order to have a better ergonomy with the alerter, swap the SPACE and Z keys.
+
+FR :
+Ce script pour Open Rails reproduit le comportement des systèmes de sécurité des trains français plus anciens (notamment sans KVB).
+Les systèmes qui seront disponibles sont :
+- RS : Répétition des Signaux
+- DAAT : Dispositif d'Arrêt Automatique des Trains
+- TVM 300 : Transmission Voie Machine
+
+Si vous avez besoin de sons différents, mettez le fichier SMS et les fichiers WAV dans le dossier Sound de votre locomotive.
+En utilisant les fichiers INI existants, vous pouvez créer votre propre fichier de paramètres si votre train est différent.
+Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ces paramètres :  
+ORTSTrainControlSystem( "..\\..\\common.script\\Old_TCS_France.cs" )  
+ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.sms" )  
+ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
+
+Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE et W.
+
 ## PBL2BrakeController
 
 EN :
