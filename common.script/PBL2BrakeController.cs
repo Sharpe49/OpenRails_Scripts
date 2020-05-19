@@ -286,6 +286,10 @@ namespace ORTS.Scripting.Script
                     Release = true;
                     break;
 
+                case BrakeControllerEvent.StartDecreaseToZero:
+                    QuickRelease = true;
+                    break;
+
                 case BrakeControllerEvent.SetCurrentPercent:
                     if (value != null)
                     {
