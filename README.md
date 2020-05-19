@@ -76,14 +76,26 @@ Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, interve
 ## PBL2BrakeController
 
 EN :
-This script reproduces the behaviour of the PBL2 brake controller.
+This script reproduces the behaviour of the PBL2 brake controller used in French locomotives.
 To activate the script, in your ENG file, in the Engine section, write this parameter:  
 ORTSTrainBrakeController( "..\\..\\common.script\\PBL2BrakeController.cs" )  
 
 FR :
-Ce script pour Open Rails reproduit le comportement du robinet de freinage PBL2.
+Ce script pour Open Rails reproduit le comportement du robinet de freinage PBL2 utilisé dans les locomotives françaises.
 Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ce paramètre :  
 ORTSTrainBrakeController( "..\\..\\common.script\\PBL2BrakeController.cs" )  
+
+## PBA2BrakeController
+
+EN :
+This script reproduces the behaviour of the PBA2 brake controller used in French multiple units.
+To activate the script, in your ENG file, in the Engine section, write this parameter:  
+ORTSTrainBrakeController( "..\\..\\common.script\\PBA2BrakeController.cs" )  
+
+FR :
+Ce script pour Open Rails reproduit le comportement du robinet de freinage PBA2 utilisé dans les automotrices françaises.
+Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ce paramètre :  
+ORTSTrainBrakeController( "..\\..\\common.script\\PBA2BrakeController.cs" )  
 
 ## SNCFCircuitBreaker
 
