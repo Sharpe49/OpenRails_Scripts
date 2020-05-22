@@ -329,12 +329,12 @@ namespace ORTS.Scripting.Script
         {
             UpdateSignalPassed();
 
-            if (IsAlerterEnabled() && VACMAPresent)
+            if (IsTrainControlEnabled() && IsAlerterEnabled() && VACMAPresent)
             {
                 UpdateVACMA();
             }
 
-            if (IsTrainControlEnabled())
+            if (IsTrainControlEnabled() && IsSpeedControlEnabled())
             {
                 if (RSOPresent)
                 {
