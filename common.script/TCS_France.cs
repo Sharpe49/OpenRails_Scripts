@@ -350,10 +350,7 @@ namespace ORTS.Scripting.Script
 
             UpdateSignalPassed();
 
-            if (IsTrainControlEnabled() && IsAlerterEnabled() && VACMAPresent)
-            {
-                UpdateVACMA();
-            }
+            UpdateVACMA();
 
             if (IsTrainControlEnabled() && IsSpeedControlEnabled())
             {
@@ -1070,8 +1067,9 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (!Activated || !IsAlerterEnabled() || SpeedMpS() < VACMAActivationSpeedMpS)
+            if (!VACMAPresent || !Activated || !IsTrainControlEnabled() || !IsAlerterEnabled() || SpeedMpS() < VACMAActivationSpeedMpS)
             {
+                // Reset everything
                 VACMAReleasedAlertTimer.Stop();
                 VACMAReleasedEmergencyTimer.Stop();
                 VACMAPressedAlertTimer.Stop();
