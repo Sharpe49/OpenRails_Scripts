@@ -15,10 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
-using System;
-using System.Collections.Generic;
+using Orts.Simulation;
 using ORTS.Common;
 using ORTS.Scripting.Api;
+using System;
+using System.Collections.Generic;
 
 namespace ORTS.Scripting.Script
 {
@@ -41,6 +42,33 @@ namespace ORTS.Scripting.Script
             L1,         // Level 1 : Beacon transmission, loop transmission and radio in-fill
             L2,         // Level 2 : Radio transmission, beacon positionning
             L3          // Level 3 : Same as level 2 + moving block
+        }
+
+        enum KVBStateType
+        {
+            Normal,
+            Alert,
+            Emergency
+        }
+
+        enum KVBPreAnnounceType
+        {
+            Deactivated,
+            Armed,
+            Triggered
+        }
+
+        enum KVBModeType
+        {
+            ConventionalLine,
+            HighSpeedLine,
+            Shunting
+        }
+
+        enum KVBReleaseSpeed
+        {
+            V30,
+            V10
         }
 
         CCS ActiveCCS = CCS.RSO;
@@ -86,34 +114,31 @@ namespace ORTS.Scripting.Script
         float KVBDelayBeforeBrakingEstablishedS;            // Tbo
 
         // Variables
-        bool KVBEmergencyBraking = false;
-        bool KVBPreviousEmergencyBraking = false;
-        bool KVBPreviousOverspeed = false;
-        bool KVBPreAnnounceActive = false;
-        bool KVBPreviousPreAnnounceActive = false;
+        float InitCount = 0;
 
-        float KVBCurrentSignalSpeedLimitMpS;
-        float KVBNextSignalSpeedLimitMpS;
-        float KVBSignalTargetSpeedMpS;
-        float KVBSignalTargetDistanceM;
+        KVBStateType KVBState = KVBStateType.Normal;
+        KVBPreAnnounceType KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
+        KVBModeType KVBMode = KVBModeType.ConventionalLine;
+
+        Aspect KVBLastSignalAspect = Aspect.Clear_1;
+        float KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
+
+        int KVBStopTargetSignalNumber = -1;
+        float KVBStopTargetDistanceM = float.PositiveInfinity;
+        KVBReleaseSpeed KVBStopTargetReleaseSpeed = KVBReleaseSpeed.V30;
+        bool KVBOnSight = false;
+
+        int KVBSpeedRestrictionTargetSignalNumber = -1;
+        float KVBSpeedRestrictionTargetDistanceM = float.PositiveInfinity;
+        float KVBSpeedRestrictionTargetSpeedMpS = float.PositiveInfinity;
+
         float KVBDeclivity = 0f;                            // i
 
-        float KVBCurrentSpeedPostSpeedLimitMpS;
-        float KVBNextSpeedPostSpeedLimitMpS;
-        float KVBSpeedPostTargetSpeedMpS;
-        float KVBSpeedPostTargetDistanceM;
+        float KVBCurrentLineSpeedLimitMpS = float.PositiveInfinity;
+        float KVBNextLineSpeedLimitMpS = float.PositiveInfinity;
+        float KVBNextLineSpeedDistanceM = float.PositiveInfinity;
 
-        float KVBCurrentAlertSpeedMpS;
-        float KVBCurrentEBSpeedMpS;
-        float KVBNextAlertSpeedMpS;
-        float KVBNextEBSpeedMpS;
-
-        float KVBSignalEmergencySpeedCurveMpS;
-        float KVBSignalAlertSpeedCurveMpS;
-        float KVBSpeedPostEmergencySpeedCurveMpS;
-        float KVBSpeedPostAlertSpeedCurveMpS;
-
-    // TVM COVIT common
+        // TVM COVIT common
         // Parameters
         bool TVMCOVITInhibited = false;
 
@@ -253,10 +278,14 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedAlertTimer;
         Timer VACMAReleasedEmergencyTimer;
 
-    // Other variables
+        // Other variables
         bool ExternalEmergencyBraking = false;
-        float PreviousSignalDistanceM = 0f;
-        bool SignalPassed = false;
+
+        float PreviousNormalSignalDistanceM = 0f;
+        bool NormalSignalPassed = false;
+
+        float PreviousDistantSignalDistanceM = 0f;
+        bool DistantSignalPassed = false;
 
         public TCS_France() { }
 
@@ -295,21 +324,6 @@ namespace ORTS.Scripting.Script
             VACMAPressedEmergencyDelayS = GetFloatParameter("VACMA", "PressedEmergencyDelayS", 60f);
 
             // Variables initialization
-            KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-            KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-            KVBSignalTargetSpeedMpS = KVBTrainSpeedLimitMpS;
-            KVBSignalTargetDistanceM = 0f;
-
-            KVBCurrentSpeedPostSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-            KVBNextSpeedPostSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-            KVBSpeedPostTargetSpeedMpS = KVBTrainSpeedLimitMpS;
-            KVBSpeedPostTargetDistanceM = 0f;
-
-            KVBCurrentAlertSpeedMpS = MpS.FromKpH(5f);
-            KVBCurrentEBSpeedMpS = MpS.FromKpH(10f);
-            KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-            KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-
             VACMAPressedAlertTimer = new Timer(this);
             VACMAPressedAlertTimer.Setup(VACMAPressedAlertDelayS);
             VACMAPressedEmergencyTimer = new Timer(this);
@@ -322,11 +336,18 @@ namespace ORTS.Scripting.Script
             TVM430AspectChangeTimer = new Timer(this);
             TVM430AspectChangeTimer.Setup(4.7f);
             Activated = true;
-            PreviousSignalDistanceM = 0f;
+
+            SetNextSignalAspect(Aspect.Clear_1);
         }
 
         public override void Update()
         {
+            if (InitCount < 5)
+            {
+                InitCount++;
+                return;
+            }
+
             UpdateSignalPassed();
 
             if (IsTrainControlEnabled() && IsAlerterEnabled() && VACMAPresent)
@@ -347,9 +368,6 @@ namespace ORTS.Scripting.Script
                     {
                         // Classic line = KVB active
                         ActiveCCS = CCS.KVB;
-
-                        if (SignalPassed)
-                            SetNextSignalAspect(NextSignalAspect(0));
 
                         UpdateKVB();
                     }
@@ -386,21 +404,11 @@ namespace ORTS.Scripting.Script
                         UpdateTVM430Display();
                         UpdateTVM430COVIT();
                     }
-                    else if (KVBPresent)
-                    {
-                        // TVM not activated because not present
-                        ActiveCCS = CCS.KVB;
-
-                        if (SignalPassed)
-                            SetNextSignalAspect(NextSignalAspect(0));
-
-                        KVBEmergencyBraking = true;
-                    }
                 }
 
                 SetEmergencyBrake(
                     RSOEmergencyBraking
-                    || KVBEmergencyBraking
+                    || KVBState == KVBStateType.Emergency
                     || TVMCOVITEmergencyBraking
                     || VACMAEmergencyBraking
                     || ExternalEmergencyBraking
@@ -409,7 +417,7 @@ namespace ORTS.Scripting.Script
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
                 SetPowerAuthorization(!RSOEmergencyBraking
-                    && !KVBEmergencyBraking
+                    && KVBState != KVBStateType.Emergency
                     && !TVMCOVITEmergencyBraking
                     && !VACMAEmergencyBraking
                 );
@@ -441,17 +449,18 @@ namespace ORTS.Scripting.Script
             {
                 if (NextSignalAspect(0) == Aspect.Stop
                     || NextSignalAspect(0) == Aspect.StopAndProceed
-                    || NextSignalAspect(0) == Aspect.Restricted)
+                    || NextSignalAspect(0) == Aspect.Restricted
+                    || NextSignalAspect(0) == Aspect.Approach_1
+                    || NextSignalAspect(0) == Aspect.Approach_2
+                    || NextSignalAspect(0) == Aspect.Approach_3
+                    )
                     RSOClosedSignal = true;
-                else if (NextSignalAspect(1) == Aspect.Stop
-                    || NextSignalAspect(1) == Aspect.StopAndProceed)
-                    RSOClosedSignal = true;
-                else if (NextSignalSpeedLimitMpS(1) >= 0f && NextSignalSpeedLimitMpS(1) < MpS.FromKpH(160f))
+                else if (NextSignalSpeedLimitMpS(1) > 0f && NextSignalSpeedLimitMpS(1) < MpS.FromKpH(160f))
                     RSOClosedSignal = true;
                 else
                     RSOOpenedSignal = true;
             }
-            if (SignalPassed)
+            if (NormalSignalPassed || DistantSignalPassed)
                 RSOClosedSignal = RSOOpenedSignal = false;
 
             if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
@@ -471,6 +480,48 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVB()
         {
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f))
+            {
+                KVBMode = KVBModeType.HighSpeedLine;
+
+                ResetKVBTargets();
+
+                if (!TVM300Present && !TVM430Present)
+                {
+                    KVBState = KVBStateType.Emergency;
+                }
+            }
+            else
+            {
+                KVBMode = KVBModeType.ConventionalLine;
+
+                UpdateKVBParameters();
+
+                UpdateKVBTargets();
+
+                UpdateKVBSpeedControl();
+
+                UpdateKVBDisplay();
+
+                // Send data to the simulator
+                if (KVBStopTargetSignalNumber == 0)
+                {
+                    SetNextSpeedLimitMpS(0f);
+                }
+                else if (KVBSpeedRestrictionTargetSignalNumber == 0)
+                {
+                    SetNextSpeedLimitMpS(KVBSpeedRestrictionTargetSpeedMpS);
+                }
+                else
+                {
+                    SetNextSpeedLimitMpS(KVBNextLineSpeedLimitMpS);
+                }
+                SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
+            }
+        }
+
+        protected void UpdateKVBParameters()
+        {
             KVBTrainLengthM = (float)Math.Ceiling((double)(TrainLengthM() / 100f)) * 100f;
             if (ElectroPneumaticBrake)
                 KVBDelayBeforeBrakingEstablishedS = 2f;
@@ -478,256 +529,373 @@ namespace ORTS.Scripting.Script
                 KVBDelayBeforeBrakingEstablishedS = 12f + KVBTrainLengthM / 200f;
             else
                 KVBDelayBeforeBrakingEstablishedS = 2f + 2f * KVBTrainLengthM * KVBTrainLengthM * 0.00001f;
-
-            // Decode signal aspect
-            switch (NextSignalAspect(0))
-            {
-                case Aspect.Stop:
-                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
-                    if (SignalPassed)
-                    {
-                        KVBNextSignalSpeedLimitMpS = MpS.FromKpH(10f);
-                        KVBSignalTargetSpeedMpS = 0f;
-                        KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
-                        KVBNextEBSpeedMpS = MpS.FromKpH(5f);
-                    }
-                    break;
-
-                case Aspect.StopAndProceed:
-                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
-                    if (SignalPassed)
-                    {
-                        KVBNextSignalSpeedLimitMpS = MpS.FromKpH(30f);
-                        KVBSignalTargetSpeedMpS = 0f;
-                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                    }
-                    break;
-
-                // Approach : Check if the 2nd signal is red (a yellow blinking aspect may have been crossed)
-                case Aspect.Approach_1:
-                case Aspect.Approach_2:
-                case Aspect.Approach_3:
-                    switch (NextSignalAspect(1))
-                    {
-                        case Aspect.Stop:
-                            KVBSignalTargetDistanceM = NextSignalDistanceM(1);
-                            if (SignalPassed)
-                            {
-                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                                else
-                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-                                KVBSignalTargetSpeedMpS = 0f;
-                                KVBNextAlertSpeedMpS = MpS.FromKpH(2.5f);
-                                KVBNextEBSpeedMpS = MpS.FromKpH(5f);
-                            }
-                            break;
-
-                        case Aspect.StopAndProceed:
-                            KVBSignalTargetDistanceM = NextSignalDistanceM(1);
-                            if (SignalPassed)
-                            {
-                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                                else
-                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-                                KVBSignalTargetSpeedMpS = 0f;
-                                KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-                                KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                            }
-                            break;
-
-                        default:
-                            KVBSignalTargetDistanceM = NextSignalDistanceM(0);
-                            if (SignalPassed)
-                            {
-                                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                                    KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                                else
-                                    KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-                                KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
-                                KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-                                KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                            }
-                            break;
-                    }
-                    break;
-
-                // Clear 
-                default:
-                    KVBSignalTargetDistanceM = NextSignalDistanceM(0);
-                    if (SignalPassed)
-                    {
-                        if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                            KVBNextSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                        else
-                            KVBNextSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-                        KVBSignalTargetSpeedMpS = KVBNextSignalSpeedLimitMpS;
-                        KVBNextAlertSpeedMpS = MpS.FromKpH(5f);
-                        KVBNextEBSpeedMpS = MpS.FromKpH(10f);
-                    }
-                    break;
-            }
-
-            // Update current speed limit when speed is below the target or when the train approaches the signal
-            if (NextSignalDistanceM(0) <= 5f)
-            {
-                if (NextSignalSpeedLimitMpS(0) > 0f && NextSignalSpeedLimitMpS(0) < KVBTrainSpeedLimitMpS)
-                    KVBCurrentSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0);
-                else
-                    KVBCurrentSignalSpeedLimitMpS = KVBTrainSpeedLimitMpS;
-            }
-
-            // Speed post speed limit preparation
-
-            KVBNextSpeedPostSpeedLimitMpS = (NextPostSpeedLimitMpS(0) > 0 ? NextPostSpeedLimitMpS(0) : KVBTrainSpeedLimitMpS);
-            KVBCurrentSpeedPostSpeedLimitMpS = CurrentPostSpeedLimitMpS();
-            KVBSpeedPostTargetSpeedMpS = KVBNextSpeedPostSpeedLimitMpS;
-            KVBSpeedPostTargetDistanceM = NextPostDistanceM(0);
-
-            SetNextSpeedLimitMpS(Math.Min(KVBNextSignalSpeedLimitMpS, KVBNextSpeedPostSpeedLimitMpS));
-            SetCurrentSpeedLimitMpS(Math.Min(KVBCurrentSignalSpeedLimitMpS, KVBCurrentSpeedPostSpeedLimitMpS));
-
-            UpdateKVBSpeedCurve();
-
-            // Pre-announce aspect => KVB beep
-            if (KVBCurrentSpeedPostSpeedLimitMpS > MpS.FromKpH(160f))
-            {
-                if (KVBPreAnnounceActive)
-                {
-                    if (
-                        SignalPassed
-                        && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
-                        && KVBNextSignalSpeedLimitMpS <= MpS.FromKpH(160f)
-                    )
-                        KVBPreAnnounceActive = false;
-                    else if (
-                        KVBNextSpeedPostSpeedLimitMpS <= MpS.FromKpH(160f)
-                        && KVBSpeedPostTargetDistanceM <= 3000f
-                    )
-                        KVBPreAnnounceActive = false;
-                }
-                else if (
-                    SignalPassed
-                    && KVBCurrentSignalSpeedLimitMpS > MpS.FromKpH(160f)
-                    && KVBNextSignalSpeedLimitMpS > MpS.FromKpH(160f)
-                    && (
-                        KVBNextSpeedPostSpeedLimitMpS > MpS.FromKpH(160f)
-                        || KVBSpeedPostTargetDistanceM > 3000f
-                    )
-                )
-                    KVBPreAnnounceActive = true;
-            }
-            else
-                KVBPreAnnounceActive = false;
-
-            if (!KVBPreAnnounceActive && KVBPreviousPreAnnounceActive)
-                TriggerSoundInfo2();
-
-            KVBPreviousPreAnnounceActive = KVBPreAnnounceActive;
         }
 
-        protected void UpdateKVBSpeedCurve()
+        protected void UpdateKVBTargets()
         {
-            bool KVBOverspeed = false;
-            
-            KVBSignalEmergencySpeedCurveMpS =
-                Math.Min( 
-                    Math.Min(
-                        Math.Max(
-                            SpeedCurve(
-                                KVBSignalTargetDistanceM,
-                                KVBSignalTargetSpeedMpS,
-                                KVBDeclivity,
-                                KVBDelayBeforeBrakingEstablishedS,
-                                SafeDecelerationMpS2
-                            ),
-                            KVBNextSignalSpeedLimitMpS + KVBNextEBSpeedMpS
-                        ),
-                        KVBTrainSpeedLimitMpS + MpS.FromKpH(10f)
-                    ),
-                    KVBCurrentSignalSpeedLimitMpS + KVBCurrentEBSpeedMpS
-                );
-            KVBSignalAlertSpeedCurveMpS =
-                Math.Min(
-                    Math.Min(
-                        Math.Max(
-                            SpeedCurve(
-                                KVBSignalTargetDistanceM,
-                                KVBSignalTargetSpeedMpS,
-                                KVBDeclivity,
-                                KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
-                                SafeDecelerationMpS2
-                            ),
-                            KVBNextSignalSpeedLimitMpS + KVBNextAlertSpeedMpS
-                        ),
-                        KVBTrainSpeedLimitMpS + MpS.FromKpH(5f)
-                    ),
-                    KVBCurrentSignalSpeedLimitMpS + KVBCurrentAlertSpeedMpS
-                );
-            KVBSpeedPostEmergencySpeedCurveMpS =
-                Math.Min(
-                    Math.Min(
-                        Math.Max(
-                            SpeedCurve(
-                                KVBSpeedPostTargetDistanceM,
-                                KVBSpeedPostTargetSpeedMpS,
-                                KVBDeclivity,
-                                KVBDelayBeforeBrakingEstablishedS,
-                                SafeDecelerationMpS2
-                            ),
-                            KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(10f)
-                        ),
-                        KVBTrainSpeedLimitMpS + MpS.FromKpH(10f)
-                    ),
-                    KVBCurrentSpeedPostSpeedLimitMpS + MpS.FromKpH(10f)
-                );
-            KVBSpeedPostAlertSpeedCurveMpS =
-                Math.Min(
-                    Math.Min(
-                        Math.Max(
-                            SpeedCurve(
-                                KVBSpeedPostTargetDistanceM,
-                                KVBSpeedPostTargetSpeedMpS,
-                                KVBDeclivity,
-                                KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
-                                SafeDecelerationMpS2
-                            ),
-                            KVBNextSpeedPostSpeedLimitMpS + MpS.FromKpH(5f)
-                        ),
-                        KVBTrainSpeedLimitMpS + MpS.FromKpH(5f)
-                    ),
-                    KVBCurrentSpeedPostSpeedLimitMpS + MpS.FromKpH(5f)
-                );
+            // Line speed limit
+            KVBCurrentLineSpeedLimitMpS = CurrentPostSpeedLimitMpS();
+            KVBNextLineSpeedLimitMpS = NextPostSpeedLimitMpS(0) > 0 ? NextPostSpeedLimitMpS(0) : float.PositiveInfinity;
+            KVBNextLineSpeedDistanceM = NextPostDistanceM(0);
 
-            if (SpeedMpS() > KVBSignalAlertSpeedCurveMpS)
+            // If train is about to cross a normal signal, get its information.
+            float nextNormalSignalDistance = NextSignalDistanceM(0);
+            if (nextNormalSignalDistance <= 5f)
             {
-                KVBOverspeed = true;
-
-                if (SpeedMpS() > KVBSignalEmergencySpeedCurveMpS)
-                    KVBEmergencyBraking = true;
+                KVBLastSignalAspect = NextSignalAspect(0);
+                KVBLastSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0) > 0f ? NextSignalSpeedLimitMpS(0) : float.PositiveInfinity;
             }
 
-            if (SpeedMpS() > KVBSpeedPostAlertSpeedCurveMpS)
+            // If train is about to cross a normal signal, get its information.
+            float nextDistantSignalDistance = NextDistanceSignalDistanceM();
+            if (nextDistantSignalDistance <= 5f)
             {
-                KVBOverspeed = true;
-
-                if (SpeedMpS() > KVBSpeedPostEmergencySpeedCurveMpS)
-                    KVBEmergencyBraking = true;
+                KVBLastSignalAspect = NextDistanceSignalAspect();
             }
 
-            if (KVBEmergencyBraking && SpeedMpS() < 0.1f)
-                KVBEmergencyBraking = false;
+            // If not on sight, current track node is longer than train length and no switch is in front of us, release the signal speed limit
+            float trackNodeOFfset = Locomotive().Train.FrontTDBTraveller.TrackNodeOffset;
+            float nextDivergingSwitchDistanceM = NextDivergingSwitchDistanceM(500f);
+            float nextTrailingDivergingSwitchDistanceM = NextTrailingDivergingSwitchDistanceM(500f);
+            if (!KVBOnSight
+                && trackNodeOFfset > KVBTrainLengthM
+                && nextDivergingSwitchDistanceM > nextNormalSignalDistance
+                && nextTrailingDivergingSwitchDistanceM > nextNormalSignalDistance
+                )
+            {
+                KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
+            }
 
-            SetOverspeedWarningDisplay(KVBOverspeed);
-            if (KVBOverspeed && !KVBPreviousOverspeed)
-                TriggerSoundPenalty1();
-            KVBPreviousOverspeed = KVBOverspeed;
+            if (NormalSignalPassed || DistantSignalPassed)
+            {
+                // Signal passed at danger check
+                if (KVBLastSignalAspect == Aspect.Stop)
+                {
+                    KVBState = KVBStateType.Emergency;
+                    TriggerSoundPenalty2();
 
-            if (KVBEmergencyBraking && !KVBPreviousEmergencyBraking)
-                TriggerSoundPenalty2();
-            KVBPreviousEmergencyBraking = KVBEmergencyBraking;
+                    // On sight till the end of the block section
+                    KVBOnSight = true;
+                    KVBLastSignalSpeedLimitMpS = MpS.FromKpH(30);
+                }
+                else if (KVBLastSignalAspect == Aspect.StopAndProceed)
+                {
+                    KVBOnSight = true;
+                    KVBLastSignalSpeedLimitMpS = MpS.FromKpH(30);
+                }
+                // Search for a stop target
+                else
+                {
+                    KVBOnSight = false;
+
+                    int i;
+                    Aspect aspect;
+
+                    // Search for the next stop signal
+                    for (i = 0; i < 5; i++)
+                    {
+                        aspect = NextSignalAspect(i);
+
+                        if (aspect == Aspect.Stop
+                            || aspect == Aspect.StopAndProceed)
+                        {
+                            break;
+                        }
+                    }
+
+                    // If signal found
+                    if (i < 5)
+                    {
+                        KVBStopTargetSignalNumber = i;
+                        KVBStopTargetDistanceM = NextSignalDistanceM(i);
+                    }
+                    else
+                    {
+                        KVBStopTargetSignalNumber = -1;
+                        KVBStopTargetDistanceM = float.PositiveInfinity;
+                    }
+
+                    // Reset release speed
+                    KVBStopTargetReleaseSpeed = KVBReleaseSpeed.V30;
+                }
+
+                // Search for a speed restriction target
+                {
+                    int i;
+                    float speed = 0f;
+
+                    // Search for the next stop signal
+                    for (i = 0; i < 5; i++)
+                    {
+                        speed = NextSignalSpeedLimitMpS(i);
+
+                        if (speed > 0f && speed < KVBTrainSpeedLimitMpS)
+                        {
+                            break;
+                        }
+                    }
+
+                    // If signal found
+                    if (i < 5)
+                    {
+                        KVBSpeedRestrictionTargetSignalNumber = i;
+                        KVBSpeedRestrictionTargetDistanceM = NextSignalDistanceM(i);
+                        KVBSpeedRestrictionTargetSpeedMpS = speed;
+                    }
+                    else
+                    {
+                        KVBSpeedRestrictionTargetSignalNumber = -1;
+                        KVBSpeedRestrictionTargetDistanceM = float.PositiveInfinity;
+                        KVBSpeedRestrictionTargetSpeedMpS = float.PositiveInfinity;
+                    }
+                }
+            }
+
+            // Pre-announce aspect
+            switch (KVBPreAnnounce)
+            {
+                case KVBPreAnnounceType.Deactivated:
+                    if (KVBLastSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                        && (KVBSpeedRestrictionTargetSignalNumber != 0 || KVBSpeedRestrictionTargetSpeedMpS > MpS.FromKpH(160f))
+                        && KVBCurrentLineSpeedLimitMpS > MpS.FromKpH(160f)
+                        && (KVBNextLineSpeedLimitMpS > MpS.FromKpH(160f) || KVBNextLineSpeedDistanceM > 3000f))
+                    {
+                        KVBPreAnnounce = KVBPreAnnounceType.Armed;
+                    }
+                    break;
+
+                case KVBPreAnnounceType.Armed:
+                    if (KVBCurrentLineSpeedLimitMpS <= MpS.FromKpH(160f))
+                    {
+                        KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
+                    }
+
+                    if (NormalSignalPassed
+                        && KVBLastSignalSpeedLimitMpS > MpS.FromKpH(160f)
+                        && KVBSpeedRestrictionTargetSignalNumber == 0
+                        && KVBSpeedRestrictionTargetSpeedMpS <= MpS.FromKpH(160f))
+                    {
+                        KVBPreAnnounce = KVBPreAnnounceType.Triggered;
+                        TriggerSoundInfo2();
+                    }
+                    // TODO : Use the P sign in order to locate the point where pre-announce must be deactivated (instead of 3000m before the start of the restriction)
+                    else if (KVBNextLineSpeedLimitMpS <= MpS.FromKpH(160f)
+                        && KVBNextLineSpeedDistanceM <= 3000f)
+                    {
+                        KVBPreAnnounce = KVBPreAnnounceType.Triggered;
+                        TriggerSoundInfo2();
+                    }
+                    break;
+
+                case KVBPreAnnounceType.Triggered:
+                    if (KVBCurrentLineSpeedLimitMpS <= MpS.FromKpH(160f)
+                        || KVBLastSignalSpeedLimitMpS <= MpS.FromKpH(160f))
+                    {
+                        KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
+                    }
+                    break;
+            }
+
+            // Update distances
+            if (KVBStopTargetSignalNumber >= 0)
+            {
+                KVBStopTargetDistanceM = NextSignalDistanceM(KVBStopTargetSignalNumber);
+
+                // Proximity to a C aspect
+                if (KVBStopTargetDistanceM <= 200f
+                    && KVBStopTargetReleaseSpeed == KVBReleaseSpeed.V30
+                    && NextSignalAspect(KVBStopTargetSignalNumber) == Aspect.Stop)
+                {
+                    KVBStopTargetReleaseSpeed = KVBReleaseSpeed.V10;
+                }
+            }
+
+            if (KVBSpeedRestrictionTargetSignalNumber >= 0)
+            {
+                KVBSpeedRestrictionTargetDistanceM = NextSignalDistanceM(KVBSpeedRestrictionTargetSignalNumber);
+            }
+        }
+
+        protected void UpdateKVBSpeedControl()
+        {
+            float KVBStopTargetAlertSpeedMpS = MpS.FromKpH(5f);
+            float KVBStopTargetEBSpeedMpS = MpS.FromKpH(10f);
+            float KVBStopTargetReleaseSpeedMpS = MpS.FromKpH(30f);
+            if (KVBStopTargetReleaseSpeed == KVBReleaseSpeed.V10)
+            {
+                KVBStopTargetAlertSpeedMpS = MpS.FromKpH(2.5f);
+                KVBStopTargetEBSpeedMpS = MpS.FromKpH(5f);
+                KVBStopTargetReleaseSpeedMpS = MpS.FromKpH(10f);
+            }
+
+            bool alert = false;
+            bool emergency = false;
+
+            // Train speed limit
+            alert |= SpeedMpS() > KVBTrainSpeedLimitMpS + MpS.FromKpH(5f);
+            emergency |= SpeedMpS() > KVBTrainSpeedLimitMpS + MpS.FromKpH(10f);
+
+            // Stop aspect
+            if (KVBStopTargetSignalNumber >= 0)
+            {
+                alert |= CheckKVBSpeedCurve(
+                    KVBStopTargetDistanceM,
+                    0f,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
+                    KVBStopTargetAlertSpeedMpS,
+                    KVBStopTargetReleaseSpeedMpS);
+
+                emergency |= CheckKVBSpeedCurve(
+                    KVBStopTargetDistanceM,
+                    0f,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS,
+                    KVBStopTargetEBSpeedMpS,
+                    KVBStopTargetReleaseSpeedMpS);
+            }
+
+            // Speed restriction
+            if (KVBSpeedRestrictionTargetSignalNumber >= 0)
+            {
+                alert |= CheckKVBSpeedCurve(
+                    KVBSpeedRestrictionTargetDistanceM,
+                    KVBSpeedRestrictionTargetSpeedMpS,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
+                    MpS.FromKpH(5f),
+                    KVBSpeedRestrictionTargetSpeedMpS);
+
+                emergency |= CheckKVBSpeedCurve(
+                    KVBSpeedRestrictionTargetDistanceM,
+                    KVBSpeedRestrictionTargetSpeedMpS,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS,
+                    MpS.FromKpH(10f),
+                    KVBSpeedRestrictionTargetSpeedMpS);
+            }
+
+            // Current speed restriction
+            alert |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
+            emergency |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(10f);
+
+            // Current line speed
+            if (KVBCurrentLineSpeedLimitMpS > MpS.FromKpH(160f) && KVBPreAnnounce == KVBPreAnnounceType.Deactivated)
+            {
+                alert |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
+                emergency |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(10f);
+            }
+            else
+            {
+                alert |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
+                emergency |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(10f);
+            }
+
+            // Next line speed
+            if (KVBNextLineSpeedLimitMpS < KVBCurrentLineSpeedLimitMpS)
+            {
+                alert |= CheckKVBSpeedCurve(
+                    KVBNextLineSpeedDistanceM,
+                    KVBNextLineSpeedLimitMpS,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS + KVBDelayBeforeEmergencyBrakingS,
+                    MpS.FromKpH(5f),
+                    KVBNextLineSpeedLimitMpS);
+
+                emergency |= CheckKVBSpeedCurve(
+                    KVBNextLineSpeedDistanceM,
+                    KVBNextLineSpeedLimitMpS,
+                    KVBDeclivity,
+                    KVBDelayBeforeBrakingEstablishedS,
+                    MpS.FromKpH(10f),
+                    KVBNextLineSpeedLimitMpS);
+            }
+
+            switch (KVBState)
+            {
+                case KVBStateType.Normal:
+                    if (alert)
+                    {
+                        TriggerSoundPenalty1();
+                        KVBState = KVBStateType.Alert;
+                        Message(ConfirmLevel.Warning, "KVB : Survitesse / Overspeed");
+                    }
+                    break;
+
+                case KVBStateType.Alert:
+                    if (!alert)
+                    {
+                        KVBState = KVBStateType.Normal;
+                    }
+                    else if (emergency)
+                    {
+                        TriggerSoundPenalty2();
+                        KVBState = KVBStateType.Emergency;
+                        Message(ConfirmLevel.Warning, "KVB : Survitesse / Overspeed");
+                    }
+                    break;
+
+                case KVBStateType.Emergency:
+                    if (SpeedMpS() < 0.1f)
+                    {
+                        KVBState = KVBStateType.Normal;
+                    }
+                    break;
+            }
+        }
+
+        protected void UpdateKVBDisplay()
+        {
+            SetOverspeedWarningDisplay(KVBState >= KVBStateType.Alert);
+
+            if (KVBPreAnnounce == KVBPreAnnounceType.Armed)
+            {
+                SetNextSignalAspect(Aspect.Clear_2);
+            }
+            else if (KVBStopTargetReleaseSpeed == KVBReleaseSpeed.V10)
+            {
+                SetNextSignalAspect(Aspect.Stop);
+            }
+            else
+            {
+                SetNextSignalAspect(Aspect.Clear_1);
+            }
+        }
+
+        protected bool CheckKVBSpeedCurve(float targetDistanceM, float targetSpeedMpS, float slope, float delayS, float marginMpS, float releaseSpeedMpS)
+        {
+            float speedCurveMpS =
+                Math.Max(
+                    SpeedCurve(
+                        targetDistanceM,
+                        targetSpeedMpS,
+                        slope,
+                        delayS,
+                        SafeDecelerationMpS2
+                    ),
+                    releaseSpeedMpS + marginMpS
+                );
+
+            return SpeedMpS() > speedCurveMpS;
+        }
+
+        protected void ResetKVBTargets()
+        {
+            KVBLastSignalAspect = Aspect.Clear_1;
+            KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
+
+            KVBStopTargetSignalNumber = -1;
+            KVBStopTargetDistanceM = float.PositiveInfinity;
+            KVBStopTargetReleaseSpeed = KVBReleaseSpeed.V30;
+            KVBOnSight = false;
+
+            KVBSpeedRestrictionTargetSignalNumber = -1;
+            KVBSpeedRestrictionTargetDistanceM = float.PositiveInfinity;
+            KVBSpeedRestrictionTargetSpeedMpS = float.PositiveInfinity;
+
+            KVBCurrentLineSpeedLimitMpS = float.PositiveInfinity;
+            KVBNextLineSpeedLimitMpS = float.PositiveInfinity;
+            KVBNextLineSpeedDistanceM = float.PositiveInfinity;
         }
 
         protected void UpdateTVM300Display()
@@ -808,7 +976,7 @@ namespace ORTS.Scripting.Script
             TVM430CurrentEmergencySpeedMpS = TVM430GetEmergencySpeed(TVM430CurrentSpeedLimitMpS);
             TVM430NextEmergencySpeedMpS = TVM430GetEmergencySpeed(TVM430NextSpeedLimitMpS);
 
-            if (SignalPassed)
+            if (NormalSignalPassed)
             {
                 TVM430EmergencyDecelerationMpS2 = Deceleration(
                     TVM430CurrentSpeedLimitMpS + TVM430CurrentEmergencySpeedMpS,
@@ -955,9 +1123,13 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateSignalPassed()
         {
-            SignalPassed = NextSignalDistanceM(0) > PreviousSignalDistanceM && SpeedMpS() > 0;
+            NormalSignalPassed = NextSignalDistanceM(0) > PreviousNormalSignalDistanceM;
 
-            PreviousSignalDistanceM = NextSignalDistanceM(0);
+            PreviousNormalSignalDistanceM = NextSignalDistanceM(0);
+
+            DistantSignalPassed = NextDistanceSignalDistanceM() > PreviousDistantSignalDistanceM;
+
+            PreviousDistantSignalDistanceM = NextDistanceSignalDistanceM();
         }
     }
 }
