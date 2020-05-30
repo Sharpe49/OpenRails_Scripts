@@ -1,4 +1,4 @@
-// COPYRIGHT 2014 by the Open Rails project.
+// COPYRIGHT 2020 by the Open Rails project.
 // 
 // This file is part of Open Rails.
 // 
@@ -15,25 +15,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
-using System;
-using System.Collections.Generic;
 using ORTS.Common;
 using ORTS.Scripting.Api;
+using System;
+using System.Collections.Generic;
 
 namespace ORTS.Scripting.Script
 {
     public class Old_TCS_France : TrainControlSystem
     {
-        enum CCS
-        {
-            RS,         // RS only
-            DAAT,       // RS + DAAT
-            TVM300      // RS partially inhibited + TVM300
-        }
-
-        CCS ActiveCCS = CCS.RS;
-        CCS PreviousCCS = CCS.RS;
-
     // Train parameters
         bool VACMAPresent;                                  // VACMA
         bool RSPresent;                                     // RS
@@ -128,8 +118,14 @@ namespace ORTS.Scripting.Script
 
     // Other variables
         bool ExternalEmergencyBraking = false;
-        float PreviousSignalDistanceM = 0f;
-        bool SignalPassed = false;
+
+        float PreviousNormalSignalDistanceM = 0f;
+        bool NormalSignalPassed = false;
+
+        float PreviousDistantSignalDistanceM = 0f;
+        bool DistantSignalPassed = false;
+
+        float PreviousLineSpeed = 0f;
 
         public Old_TCS_France() { }
 
@@ -168,7 +164,8 @@ namespace ORTS.Scripting.Script
             VACMAReleasedEmergencyTimer.Setup(VACMAReleasedEmergencyDelayS);
 
             Activated = true;
-            PreviousSignalDistanceM = 0f;
+
+            SetNextSignalAspect(Aspect.Clear_1);
         }
 
         public override void Update()
@@ -184,29 +181,9 @@ namespace ORTS.Scripting.Script
                     UpdateRS();
                 }
 
-                if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f))
+                if (TVM300Present)
                 {
-                    if (!DAATPresent)
-                    {
-                        ActiveCCS = CCS.RS;
-                    }
-                    else
-                    {
-                        ActiveCCS = CCS.DAAT;
-                    }
-
-                    SetNextSignalAspect(Aspect.Clear_1);
-                }
-                else
-                {
-                    // High speed line = TVM active
-                    if (TVM300Present)
-                    {
-                        ActiveCCS = CCS.TVM300;
-
-                        UpdateTVM300Display();
-                        UpdateTVM300COVIT();
-                    }
+                    UpdateTVM();
                 }
 
                 SetEmergencyBrake(
@@ -223,17 +200,9 @@ namespace ORTS.Scripting.Script
                     && !VACMAEmergencyBraking
                 );
 
-                if (ActiveCCS != CCS.TVM300)
-                {
-                    TVMAspect = Aspect.None;
-                    TVMPreviousAspect = Aspect.None;
-                }
-
                 RSType1Inhibition = IsDirectionReverse();
-                RSType2Inhibition = TVM300Present && ActiveCCS == CCS.TVM300;
+                RSType2Inhibition = TVM300Present && TVMArmed;
                 RSType3Inhibition = TVM300Present && !TVMCOVITInhibited;
-
-                PreviousCCS = ActiveCCS;
             }
         }
 
@@ -245,22 +214,24 @@ namespace ORTS.Scripting.Script
         protected void UpdateRS()
         {
             if (NextSignalDistanceM(0) < 2f
-                && (ActiveCCS == CCS.RS || ActiveCCS == CCS.DAAT)
+                && !TVMArmed
                 && SpeedMpS() > 0)
             {
                 if (NextSignalAspect(0) == Aspect.Stop
                     || NextSignalAspect(0) == Aspect.StopAndProceed
-                    || NextSignalAspect(0) == Aspect.Restricted)
-                    RSClosedSignal = true;
-                else if (NextSignalAspect(1) == Aspect.Stop
-                    || NextSignalAspect(1) == Aspect.StopAndProceed)
+                    || NextSignalAspect(0) == Aspect.Restricted
+                    || NextSignalAspect(0) == Aspect.Approach_1
+                    || NextSignalAspect(0) == Aspect.Approach_2
+                    || NextSignalAspect(0) == Aspect.Approach_3
+                    )
                     RSClosedSignal = true;
                 else if (NextSignalSpeedLimitMpS(1) >= 0f && NextSignalSpeedLimitMpS(1) < MpS.FromKpH(160f))
                     RSClosedSignal = true;
                 else
                     RSOpenedSignal = true;
             }
-            if (SignalPassed)
+
+            if (NormalSignalPassed || DistantSignalPassed)
                 RSClosedSignal = RSOpenedSignal = false;
 
             if (RSClosedSignal && !RSPreviousClosedSignal && !RSType1Inhibition
@@ -278,12 +249,50 @@ namespace ORTS.Scripting.Script
 
             if (RSOpenedSignal && !RSPreviousOpenedSignal && !RSType1Inhibition
                 || TVM300Present && TVMOpenedSignal && !TVMPreviousOpenedSignal)
+            {
                 TriggerSoundInfo1();
+            }
 
             RSPreviousClosedSignal = RSClosedSignal;
             RSPreviousOpenedSignal = RSOpenedSignal;
             TVMPreviousClosedSignal = TVMClosedSignal;
             TVMPreviousOpenedSignal = TVMOpenedSignal;
+        }
+
+        protected void UpdateTVM()
+        {
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f) && PreviousLineSpeed <= MpS.FromKpH(220f) && !TVMArmed)
+            {
+                TVMArmed = true;
+
+                TVMPreviousAspect = NextSignalAspect(0);
+                TVMAspect = NextSignalAspect(0);
+                SetNextSignalAspect(NextSignalAspect(0));
+            }
+
+            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && PreviousLineSpeed > MpS.FromKpH(220f) && TVMArmed)
+            {
+                TVMArmed = false;
+            }
+
+            PreviousLineSpeed = CurrentPostSpeedLimitMpS();
+
+            if (TVMArmed)
+            {
+                // TVM mask
+                SetCabDisplayControl(47, 1);
+
+                UpdateTVM300Display();
+                UpdateTVM300COVIT();
+            }
+            else
+            {
+                // TVM mask
+                SetCabDisplayControl(47, 0);
+
+                TVMAspect = Aspect.None;
+                TVMPreviousAspect = Aspect.None;
+            }
         }
 
         protected void UpdateTVM300Display()
@@ -356,6 +365,28 @@ namespace ORTS.Scripting.Script
                         VACMAPressedEmergencyTimer.Start();
                     }
                     break;
+
+                case TCSEvent.GenericTCSButtonReleased:
+                    {
+                        int tcsButton = -1;
+                        if (Int32.TryParse(message, out tcsButton))
+                        {
+                            switch (tcsButton)
+                            {
+                                // BP AM V1 and BP AM V2
+                                case 9:
+                                case 10:
+                                    TVMArmed = true;
+                                    break;
+
+                                // BP DM
+                                case 11:
+                                    TVMArmed = false;
+                                    break;
+                            }
+                        }
+                    }
+                    break;
             }
         }
 
@@ -415,9 +446,13 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateSignalPassed()
         {
-            SignalPassed = NextSignalDistanceM(0) > PreviousSignalDistanceM && SpeedMpS() > 0;
+            NormalSignalPassed = NextSignalDistanceM(0) > PreviousNormalSignalDistanceM;
 
-            PreviousSignalDistanceM = NextSignalDistanceM(0);
+            PreviousNormalSignalDistanceM = NextSignalDistanceM(0);
+
+            DistantSignalPassed = NextDistanceSignalDistanceM() > PreviousDistantSignalDistanceM;
+
+            PreviousDistantSignalDistanceM = NextDistanceSignalDistanceM();
         }
     }
 }
