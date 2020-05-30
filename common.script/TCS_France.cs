@@ -16,6 +16,7 @@
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
 using Orts.Simulation;
+using Orts.Simulation.RollingStocks;
 using ORTS.Common;
 using ORTS.Scripting.Api;
 using System;
@@ -62,6 +63,24 @@ namespace ORTS.Scripting.Script
         }
 
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
+
+    // Properties
+        bool RearmingButton
+        {
+            get
+            {
+                if (Locomotive() is MSTSElectricLocomotive)
+                {
+                    MSTSElectricLocomotive electricLocomotive = Locomotive() as MSTSElectricLocomotive;
+
+                    return electricLocomotive.PowerSupply.CircuitBreaker.DriverClosingOrder;
+                }
+                else
+                {
+                    return true;
+                }
+            }
+        }
 
     // Train parameters
         bool VACMAPresent;                                  // VACMA
@@ -267,6 +286,7 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedEmergencyTimer;
 
     // Other variables
+        bool EmergencyBraking = false;
         bool ExternalEmergencyBraking = false;
 
         float PreviousNormalSignalDistanceM = 0f;
@@ -359,21 +379,24 @@ namespace ORTS.Scripting.Script
                     UpdateTVM();
                 }
 
-                SetEmergencyBrake(
-                    RSOEmergencyBraking
+                if (RSOEmergencyBraking
                     || KVBState == KVBStateType.Emergency
                     || TVMCOVITEmergencyBraking
                     || VACMAEmergencyBraking
-                    || ExternalEmergencyBraking
-                );
+                    || ExternalEmergencyBraking)
+                {
+                    EmergencyBraking = true;
+                }
+                else if (RearmingButton)
+                {
+                    EmergencyBraking = false;
+                }
+
+                SetEmergencyBrake(EmergencyBraking);
 
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
-                SetPowerAuthorization(!RSOEmergencyBraking
-                    && KVBState != KVBStateType.Emergency
-                    && !TVMCOVITEmergencyBraking
-                    && !VACMAEmergencyBraking
-                );
+                SetPowerAuthorization(!EmergencyBraking);
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);

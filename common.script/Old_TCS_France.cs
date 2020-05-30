@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
+using Orts.Simulation.RollingStocks;
 using ORTS.Common;
 using ORTS.Scripting.Api;
 using System;
@@ -24,6 +25,24 @@ namespace ORTS.Scripting.Script
 {
     public class Old_TCS_France : TrainControlSystem
     {
+    // Properties
+        bool RearmingButton
+        {
+            get
+            {
+                if (Locomotive() is MSTSElectricLocomotive)
+                {
+                    MSTSElectricLocomotive electricLocomotive = Locomotive() as MSTSElectricLocomotive;
+
+                    return electricLocomotive.PowerSupply.CircuitBreaker.DriverClosingOrder;
+                }
+                else
+                {
+                    return true;
+                }
+            }
+        }
+
     // Train parameters
         bool VACMAPresent;                                  // VACMA
         bool RSPresent;                                     // RS
@@ -117,6 +136,7 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedEmergencyTimer;
 
     // Other variables
+        bool EmergencyBraking = false;
         bool ExternalEmergencyBraking = false;
 
         float PreviousNormalSignalDistanceM = 0f;
@@ -186,19 +206,23 @@ namespace ORTS.Scripting.Script
                     UpdateTVM();
                 }
 
-                SetEmergencyBrake(
-                    RSEmergencyBraking
+                if (RSEmergencyBraking
                     || TVMCOVITEmergencyBraking
                     || VACMAEmergencyBraking
-                    || ExternalEmergencyBraking
-                );
+                    || ExternalEmergencyBraking)
+                {
+                    EmergencyBraking = true;
+                }
+                else if (RearmingButton)
+                {
+                    EmergencyBraking = false;
+                }
+
+                SetEmergencyBrake(EmergencyBraking);
 
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
-                SetPowerAuthorization(!RSEmergencyBraking
-                    && !TVMCOVITEmergencyBraking
-                    && !VACMAEmergencyBraking
-                );
+                SetPowerAuthorization(!EmergencyBraking);
 
                 RSType1Inhibition = IsDirectionReverse();
                 RSType2Inhibition = TVM300Present && TVMArmed;
