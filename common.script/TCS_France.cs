@@ -449,7 +449,7 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVB()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f) || TVMArmed)
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) || TVMArmed)
             {
                 KVBMode = KVBModeType.HighSpeedLine;
 
@@ -869,7 +869,7 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(220f) && PreviousLineSpeed <= MpS.FromKpH(220f) && !TVMArmed)
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && !TVMArmed)
             {
                 TVMArmed = true;
 
@@ -878,7 +878,7 @@ namespace ORTS.Scripting.Script
                 SetNextSignalAspect(NextSignalAspect(0));
             }
 
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(220f) && PreviousLineSpeed > MpS.FromKpH(220f) && TVMArmed)
+            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && TVMArmed)
             {
                 TVMArmed = false;
             }
