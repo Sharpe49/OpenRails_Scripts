@@ -49,7 +49,11 @@ namespace ORTS.Scripting.Script
         // Not sure about the names of the buttons and lights for RS (old system)
         const int BP_AC_SF = 0;
         const int BP_A_LS_SF = 2;
+        const int BP_AM_V1 = 9;
+        const int BP_AM_V2 = 10;
+        const int BP_DM = 11;
         const int LS_SF = 32;
+        const int TVM_Mask = 47;
 
         enum RSStateType
         {
@@ -448,7 +452,7 @@ namespace ORTS.Scripting.Script
             if (TVMArmed)
             {
                 // TVM mask
-                SetCabDisplayControl(47, 1);
+                SetCabDisplayControl(TVM_Mask, 1);
 
                 UpdateTVM300Display();
                 UpdateTVM300COVIT();
@@ -456,7 +460,7 @@ namespace ORTS.Scripting.Script
             else
             {
                 // TVM mask
-                SetCabDisplayControl(47, 0);
+                SetCabDisplayControl(TVM_Mask, 0);
 
                 TVMAspect = Aspect.None;
                 TVMPreviousAspect = Aspect.None;
@@ -580,13 +584,13 @@ namespace ORTS.Scripting.Script
                                     break;
 
                                 // BP AM V1 and BP AM V2
-                                case 9:
-                                case 10:
+                                case BP_AM_V1:
+                                case BP_AM_V2:
                                     TVMArmed = true;
                                     break;
 
                                 // BP DM
-                                case 11:
+                                case BP_DM:
                                     TVMArmed = false;
                                     break;
                             }
