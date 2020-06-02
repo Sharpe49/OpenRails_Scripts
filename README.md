@@ -1,6 +1,9 @@
 Open Rails Scripts
 ==================
 
+EN : In order to copy parameters correctly, please open this file on your computer (do not copy parameters from the Github website).
+FR : Afin de copier les paramètres de manière correcte, veuillez ouvrir ce fichier sur votre ordinateur (ne pas copier les paramètres depuis le site Github).
+
 ## TCS_France
 
 EN :
@@ -20,6 +23,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\TCS_France.sms" 
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Advice : In order to have a better ergonomy with the alerter, swap the SPACE and Z keys.
+For the acknowledge button (Control Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
 
 FR :
 Ce script pour Open Rails reproduit le comportement des systèmes de sécurité des trains français.
@@ -37,7 +41,8 @@ ORTSTrainControlSystem( "..\\..\\common.script\\TCS_France.cs" )
 ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\TCS_France.sms" )  
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
-Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE et W.
+Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE (Sifflet par défaut) et W (Veille automatique par défaut).
+De même, pour la touche d'acquittement (Contrôle Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
 
 ## Old_TCS_France
 
@@ -56,6 +61,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.s
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Advice : In order to have a better ergonomy with the alerter, swap the SPACE and Z keys.
+For the acknowledge button (Control Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
 
 FR :
 Ce script pour Open Rails reproduit le comportement des systèmes de sécurité des trains français plus anciens (notamment sans KVB).
@@ -72,6 +78,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.s
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE et W.
+De même, pour la touche d'acquittement (Contrôle Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
 
 ## PBL2BrakeController
 
