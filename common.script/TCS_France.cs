@@ -55,6 +55,9 @@ namespace ORTS.Scripting.Script
         const int VY_SOS_RSO = 33;
         const int VY_SOS_VAC = 34;
         const int VY_ES_FU = 35;
+        const int VY_SOS_KVB = 36;
+        const int VY_VTE = 37;
+        const int VY_FU = 38;
         const int TVM_Mask = 47;
 
         enum ETCSLevel
@@ -706,6 +709,8 @@ namespace ORTS.Scripting.Script
                 {
                     KVBState = KVBStateType.Emergency;
                     TriggerSoundPenalty2();
+                    Message(ConfirmLevel.Warning, "SOS KVB");
+                    Message(ConfirmLevel.Warning, "KVB : Franchissement carré / Signal passed at danger");
 
                     // On sight till the end of the block section
                     KVBOnSight = true;
@@ -863,6 +868,7 @@ namespace ORTS.Scripting.Script
 
             bool alert = false;
             bool emergency = false;
+            bool vy_vte = false;
 
             // Train speed limit
             alert |= SpeedMpS() > KVBTrainSpeedLimitMpS + MpS.FromKpH(5f);
@@ -910,17 +916,20 @@ namespace ORTS.Scripting.Script
 
             // Current speed restriction
             alert |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
+            vy_vte |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
             emergency |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(10f);
 
             // Current line speed
             if (KVBCurrentLineSpeedLimitMpS > MpS.FromKpH(160f) && KVBPreAnnounce == KVBPreAnnounceType.Deactivated)
             {
                 alert |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
+                vy_vte |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
                 emergency |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(10f);
             }
             else
             {
                 alert |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
+                vy_vte |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
                 emergency |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(10f);
             }
 
@@ -969,12 +978,22 @@ namespace ORTS.Scripting.Script
                     break;
 
                 case KVBStateType.Emergency:
-                    if (SpeedMpS() < 0.1f)
+                    if (SpeedMpS() < 0.1f && RearmingButton)
                     {
                         KVBState = KVBStateType.Normal;
+                        Message(ConfirmLevel.Warning, "SOS KVB");
                     }
                     break;
             }
+
+            // VY SOS KVB
+            SetCabDisplayControl(VY_SOS_KVB, KVBState == KVBStateType.Emergency ? 1 : 0);
+
+            // VY VTE
+            SetCabDisplayControl(VY_VTE, vy_vte ? 1 : 0);
+
+            // VY FU
+            SetCabDisplayControl(VY_FU, emergency ? 1 : 0);
         }
 
         protected void UpdateKVBDisplay()
