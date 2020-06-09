@@ -49,6 +49,7 @@ namespace ORTS.Scripting.Script
         // Not sure about the names of the buttons and lights for RS (old system)
         const int BP_AC_SF = 0;
         const int BP_A_LS_SF = 2;
+        const int Z_ES_VA = 3;
         const int BP_AM_V1 = 9;
         const int BP_AM_V2 = 10;
         const int BP_DM = 11;
@@ -173,6 +174,7 @@ namespace ORTS.Scripting.Script
 
         // Variables
         bool VACMAEmergencyBraking = false;
+        bool VACMATest = false;
         bool VACMAPressed = false;
         Timer VACMAPressedAlertTimer;
         Timer VACMAPressedEmergencyTimer;
@@ -561,6 +563,11 @@ namespace ORTS.Scripting.Script
                                 case BP_A_LS_SF:
                                     RSCancelPressed = true;
                                     break;
+
+                                // Z (ES) VA
+                                case Z_ES_VA:
+                                    VACMATest = true;
+                                    break;
                             }
                         }
                     }
@@ -583,6 +590,11 @@ namespace ORTS.Scripting.Script
                                     RSCancelPressed = false;
                                     break;
 
+                                // Z (ES) VA
+                                case Z_ES_VA:
+                                    VACMATest = false;
+                                    break;
+
                                 // BP AM V1 and BP AM V2
                                 case BP_AM_V1:
                                 case BP_AM_V2:
@@ -602,7 +614,46 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (!VACMAPresent || !Activated || !IsTrainControlEnabled() || !IsAlerterEnabled() || SpeedMpS() < VACMAActivationSpeedMpS)
+            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled() && (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest))
+            {
+                if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                {
+                    VACMAReleasedAlertTimer.Stop();
+                    VACMAReleasedEmergencyTimer.Stop();
+                    VACMAPressedAlertTimer.Start();
+                    VACMAPressedEmergencyTimer.Start();
+                }
+                if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
+                {
+                    VACMAReleasedAlertTimer.Start();
+                    VACMAReleasedEmergencyTimer.Start();
+                    VACMAPressedAlertTimer.Stop();
+                    VACMAPressedEmergencyTimer.Stop();
+                }
+
+                if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
+                    TriggerSoundWarning1();
+                else
+                    TriggerSoundWarning2();
+
+                if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered)
+                    TriggerSoundAlert1();
+                else
+                    TriggerSoundAlert2();
+
+                if (!VACMAEmergencyBraking && (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
+                {
+                    VACMAEmergencyBraking = true;
+                    SetVigilanceEmergencyDisplay(true);
+                }
+
+                if (VACMAEmergencyBraking && SpeedMpS() < VACMAActivationSpeedMpS && RearmingButton)
+                {
+                    VACMAEmergencyBraking = false;
+                    SetVigilanceEmergencyDisplay(false);
+                }
+            }
+            else
             {
                 // Reset everything
                 VACMAReleasedAlertTimer.Stop();
@@ -614,43 +665,6 @@ namespace ORTS.Scripting.Script
                 TriggerSoundWarning2();
                 TriggerSoundAlert2();
                 return;
-            }
-
-            if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
-            {
-                VACMAReleasedAlertTimer.Stop();
-                VACMAReleasedEmergencyTimer.Stop();
-                VACMAPressedAlertTimer.Start();
-                VACMAPressedEmergencyTimer.Start();
-            }
-            if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
-            {
-                VACMAReleasedAlertTimer.Start();
-                VACMAReleasedEmergencyTimer.Start();
-                VACMAPressedAlertTimer.Stop();
-                VACMAPressedEmergencyTimer.Stop();
-            }
-
-            if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
-                TriggerSoundWarning1();
-            else
-                TriggerSoundWarning2();
-
-            if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered)
-                TriggerSoundAlert1();
-            else
-                TriggerSoundAlert2();
-
-            if (!VACMAEmergencyBraking && (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
-            {
-                VACMAEmergencyBraking = true;
-                SetVigilanceEmergencyDisplay(true);
-            }
-
-            if (VACMAEmergencyBraking && SpeedMpS() < 0.1f)
-            {
-                VACMAEmergencyBraking = false;
-                SetVigilanceEmergencyDisplay(false);
             }
         }
 
