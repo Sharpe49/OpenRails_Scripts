@@ -145,7 +145,7 @@ namespace ORTS.Scripting.Script
         // Variables
         RSOStateType RSOState = RSOStateType.TriggeredBlinking;
         Aspect RSOLastSignalAspect = Aspect.Clear_1;
-        bool RSOEmergencyBraking = false;
+        bool RSOEmergencyBraking = true;
         bool RSOPressed = false;
         bool RSOPreviousPressed = false;
         bool RSOCancelPressed = false;
@@ -170,9 +170,7 @@ namespace ORTS.Scripting.Script
         float KVBDelayBeforeBrakingEstablishedS;            // Tbo
 
         // Variables
-        float InitCount = 0;
-
-        KVBStateType KVBState = KVBStateType.Normal;
+        KVBStateType KVBState = KVBStateType.Emergency;
         KVBPreAnnounceType KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
         KVBModeType KVBMode = KVBModeType.ConventionalLine;
 
@@ -193,6 +191,9 @@ namespace ORTS.Scripting.Script
         float KVBCurrentLineSpeedLimitMpS = float.PositiveInfinity;
         float KVBNextLineSpeedLimitMpS = float.PositiveInfinity;
         float KVBNextLineSpeedDistanceM = float.PositiveInfinity;
+
+        bool KVBSpeedTooHighLight = false;
+        bool KVBEmergencyBrakeLight = false;
 
     // TVM COVIT common
         // Parameters
@@ -327,7 +328,7 @@ namespace ORTS.Scripting.Script
         float VACMAPressedEmergencyDelayS;
 
         // Variables
-        bool VACMAEmergencyBraking = false;
+        bool VACMAEmergencyBraking = true;
         bool VACMATest = false;
         bool VACMAPressed = false;
         Timer VACMAPressedAlertTimer;
@@ -336,6 +337,8 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedEmergencyTimer;
 
     // Other variables
+        float InitCount = 0;
+
         bool EmergencyBraking = false;
         bool ExternalEmergencyBraking = false;
 
@@ -404,6 +407,7 @@ namespace ORTS.Scripting.Script
 
             TVM430AspectChangeTimer = new Timer(this);
             TVM430AspectChangeTimer.Setup(4.7f);
+
             Activated = true;
 
             SetNextSignalAspect(Aspect.Clear_1);
@@ -414,6 +418,15 @@ namespace ORTS.Scripting.Script
             if (InitCount < 5)
             {
                 InitCount++;
+
+                if (InitCount == 5 && SpeedMpS() > 0f)
+                {
+                    RSOState = RSOStateType.Off;
+                    RSOEmergencyBraking = false;
+                    KVBState = KVBStateType.Normal;
+                    VACMAEmergencyBraking = false;
+                }
+
                 return;
             }
 
@@ -585,7 +598,15 @@ namespace ORTS.Scripting.Script
                     break;
             }
 
-            RSOEmergencyBraking = RSOEmergencyTimer.Triggered;
+            if (RSOEmergencyTimer.Triggered)
+            {
+                RSOEmergencyBraking = true;
+            }
+            else if (RearmingButton)
+            {
+                RSOEmergencyBraking = false;
+            }
+
             SetCabDisplayControl(VY_SOS_RSO, RSOEmergencyBraking ? 1 : 0);
 
             if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
@@ -620,12 +641,26 @@ namespace ORTS.Scripting.Script
             {
                 KVBMode = KVBModeType.HighSpeedLine;
 
+                KVBSpeedTooHighLight = false;
+
                 ResetKVBTargets();
 
-                if (!TVM300Present && !TVM430Present)
+                if ((!TVM300Present && !TVM430Present) || !TVMArmed)
                 {
                     KVBState = KVBStateType.Emergency;
+                    KVBEmergencyBrakeLight = true;
                 }
+                else
+                {
+                    if (RearmingButton)
+                    {
+                        KVBState = KVBStateType.Normal;
+                    }
+
+                    KVBEmergencyBrakeLight = false;
+                }
+
+                UpdateKVBDisplay();
             }
             else
             {
@@ -868,7 +903,6 @@ namespace ORTS.Scripting.Script
 
             bool alert = false;
             bool emergency = false;
-            bool vy_vte = false;
 
             // Train speed limit
             alert |= SpeedMpS() > KVBTrainSpeedLimitMpS + MpS.FromKpH(5f);
@@ -916,20 +950,20 @@ namespace ORTS.Scripting.Script
 
             // Current speed restriction
             alert |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
-            vy_vte |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
+            KVBSpeedTooHighLight |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(5f);
             emergency |= SpeedMpS() > KVBLastSignalSpeedLimitMpS + MpS.FromKpH(10f);
 
             // Current line speed
             if (KVBCurrentLineSpeedLimitMpS > MpS.FromKpH(160f) && KVBPreAnnounce == KVBPreAnnounceType.Deactivated)
             {
                 alert |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
-                vy_vte |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
+                KVBSpeedTooHighLight |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(5f);
                 emergency |= SpeedMpS() > MpS.FromKpH(160f) + MpS.FromKpH(10f);
             }
             else
             {
                 alert |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
-                vy_vte |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
+                KVBSpeedTooHighLight |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(5f);
                 emergency |= SpeedMpS() > KVBCurrentLineSpeedLimitMpS + MpS.FromKpH(10f);
             }
 
@@ -974,6 +1008,7 @@ namespace ORTS.Scripting.Script
                         TriggerSoundPenalty2();
                         KVBState = KVBStateType.Emergency;
                         Message(ConfirmLevel.Warning, "KVB : Survitesse / Overspeed");
+                        Message(ConfirmLevel.Warning, "SOS KVB");
                     }
                     break;
 
@@ -981,19 +1016,9 @@ namespace ORTS.Scripting.Script
                     if (SpeedMpS() < 0.1f && RearmingButton)
                     {
                         KVBState = KVBStateType.Normal;
-                        Message(ConfirmLevel.Warning, "SOS KVB");
                     }
                     break;
             }
-
-            // VY SOS KVB
-            SetCabDisplayControl(VY_SOS_KVB, KVBState == KVBStateType.Emergency ? 1 : 0);
-
-            // VY VTE
-            SetCabDisplayControl(VY_VTE, vy_vte ? 1 : 0);
-
-            // VY FU
-            SetCabDisplayControl(VY_FU, emergency ? 1 : 0);
         }
 
         protected void UpdateKVBDisplay()
@@ -1012,6 +1037,15 @@ namespace ORTS.Scripting.Script
             {
                 SetNextSignalAspect(Aspect.Clear_1);
             }
+
+            // VY SOS KVB
+            SetCabDisplayControl(VY_SOS_KVB, KVBState == KVBStateType.Emergency ? 1 : 0);
+
+            // VY VTE
+            SetCabDisplayControl(VY_VTE, KVBSpeedTooHighLight ? 1 : 0);
+
+            // VY FU
+            SetCabDisplayControl(VY_FU, KVBEmergencyBrakeLight ? 1 : 0);
         }
 
         protected bool CheckKVBSpeedCurve(float targetDistanceM, float targetSpeedMpS, float slope, float delayS, float marginMpS, float releaseSpeedMpS)
@@ -1033,6 +1067,8 @@ namespace ORTS.Scripting.Script
 
         protected void ResetKVBTargets()
         {
+            KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
+
             KVBLastSignalAspect = Aspect.Clear_1;
             KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
 
@@ -1343,19 +1379,29 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled() && (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest))
+            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled())
             {
-                if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                if (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest)
+                {
+                    if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                    {
+                        VACMAReleasedAlertTimer.Stop();
+                        VACMAReleasedEmergencyTimer.Stop();
+                        VACMAPressedAlertTimer.Start();
+                        VACMAPressedEmergencyTimer.Start();
+                    }
+                    if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
+                    {
+                        VACMAReleasedAlertTimer.Start();
+                        VACMAReleasedEmergencyTimer.Start();
+                        VACMAPressedAlertTimer.Stop();
+                        VACMAPressedEmergencyTimer.Stop();
+                    }
+                }
+                else
                 {
                     VACMAReleasedAlertTimer.Stop();
                     VACMAReleasedEmergencyTimer.Stop();
-                    VACMAPressedAlertTimer.Start();
-                    VACMAPressedEmergencyTimer.Start();
-                }
-                if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
-                {
-                    VACMAReleasedAlertTimer.Start();
-                    VACMAReleasedEmergencyTimer.Start();
                     VACMAPressedAlertTimer.Stop();
                     VACMAPressedEmergencyTimer.Stop();
                 }
@@ -1390,6 +1436,7 @@ namespace ORTS.Scripting.Script
                 VACMAPressedAlertTimer.Stop();
                 VACMAPressedEmergencyTimer.Stop();
                 VACMAEmergencyBraking = false;
+                SetVigilanceEmergencyDisplay(false);
 
                 TriggerSoundWarning2();
                 TriggerSoundAlert2();

@@ -95,7 +95,7 @@ namespace ORTS.Scripting.Script
         // Variables
         RSStateType RSState = RSStateType.TriggeredBlinking;
         Aspect RSLastSignalAspect = Aspect.Clear_1;
-        bool RSEmergencyBraking = false;
+        bool RSEmergencyBraking = true;
         bool RSPressed = false;
         bool RSPreviousPressed = false;
         bool RSCancelPressed = false;
@@ -173,7 +173,7 @@ namespace ORTS.Scripting.Script
         float VACMAPressedEmergencyDelayS;
 
         // Variables
-        bool VACMAEmergencyBraking = false;
+        bool VACMAEmergencyBraking = true;
         bool VACMATest = false;
         bool VACMAPressed = false;
         Timer VACMAPressedAlertTimer;
@@ -182,6 +182,8 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedEmergencyTimer;
 
     // Other variables
+        float InitCount = 0;
+
         bool EmergencyBraking = false;
         bool ExternalEmergencyBraking = false;
 
@@ -242,6 +244,20 @@ namespace ORTS.Scripting.Script
 
         public override void Update()
         {
+            if (InitCount < 5)
+            {
+                InitCount++;
+
+                if (InitCount == 5 && SpeedMpS() > 0f)
+                {
+                    RSState = RSStateType.Off;
+                    RSEmergencyBraking = false;
+                    VACMAEmergencyBraking = false;
+                }
+
+                return;
+            }
+
             UpdateSignalPassed();
 
             UpdateVACMA();
@@ -392,7 +408,14 @@ namespace ORTS.Scripting.Script
                     break;
             }
 
-            RSEmergencyBraking = RSEmergencyTimer.Triggered;
+            if (RSEmergencyTimer.Triggered)
+            {
+                RSEmergencyBraking = true;
+            }
+            else if (RearmingButton)
+            {
+                RSEmergencyBraking = false;
+            }
 
             if (RSClosedSignal && !RSPreviousClosedSignal && !RSType1Inhibition)
             {
@@ -614,19 +637,29 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled() && (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest))
+            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled())
             {
-                if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                if (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest)
+                {
+                    if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                    {
+                        VACMAReleasedAlertTimer.Stop();
+                        VACMAReleasedEmergencyTimer.Stop();
+                        VACMAPressedAlertTimer.Start();
+                        VACMAPressedEmergencyTimer.Start();
+                    }
+                    if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
+                    {
+                        VACMAReleasedAlertTimer.Start();
+                        VACMAReleasedEmergencyTimer.Start();
+                        VACMAPressedAlertTimer.Stop();
+                        VACMAPressedEmergencyTimer.Stop();
+                    }
+                }
+                else
                 {
                     VACMAReleasedAlertTimer.Stop();
                     VACMAReleasedEmergencyTimer.Stop();
-                    VACMAPressedAlertTimer.Start();
-                    VACMAPressedEmergencyTimer.Start();
-                }
-                if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
-                {
-                    VACMAReleasedAlertTimer.Start();
-                    VACMAReleasedEmergencyTimer.Start();
                     VACMAPressedAlertTimer.Stop();
                     VACMAPressedEmergencyTimer.Stop();
                 }
@@ -661,6 +694,7 @@ namespace ORTS.Scripting.Script
                 VACMAPressedAlertTimer.Stop();
                 VACMAPressedEmergencyTimer.Stop();
                 VACMAEmergencyBraking = false;
+                SetVigilanceEmergencyDisplay(false);
 
                 TriggerSoundWarning2();
                 TriggerSoundAlert2();
