@@ -575,6 +575,8 @@ namespace ORTS.Scripting.Script
                         int tcsButton = -1;
                         if (Int32.TryParse(message, out tcsButton))
                         {
+                            SetCabDisplayControl(tcsButton, 1);
+
                             switch (tcsButton)
                             {
                                 // BP (AC) SF
@@ -601,6 +603,8 @@ namespace ORTS.Scripting.Script
                         int tcsButton = -1;
                         if (Int32.TryParse(message, out tcsButton))
                         {
+                            SetCabDisplayControl(tcsButton, 0);
+
                             switch (tcsButton)
                             {
                                 // BP (AC) SF
