@@ -336,10 +336,6 @@ namespace ORTS.Scripting.Script
                 {
                     RSClosedSignal = true;
                 }
-                else if (NextSignalSpeedLimitMpS(1) > 0f && NextSignalSpeedLimitMpS(1) < MpS.FromKpH(160f))
-                {
-                    RSClosedSignal = true;
-                }
                 else
                 {
                     RSOpenedSignal = true;
