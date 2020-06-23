@@ -1326,11 +1326,6 @@ namespace ORTS.Scripting.Script
                                 case BP_A_LS_SF:
                                     RSOCancelPressed = true;
                                     break;
-
-                                // Z (ES) VA
-                                case Z_ES_VA:
-                                    VACMATest = true;
-                                    break;
                             }
                         }
                     }
@@ -1355,11 +1350,6 @@ namespace ORTS.Scripting.Script
                                     RSOCancelPressed = false;
                                     break;
 
-                                // Z (ES) VA
-                                case Z_ES_VA:
-                                    VACMATest = false;
-                                    break;
-
                                 // BP AM V1 and BP AM V2
                                 case BP_AM_V1:
                                 case BP_AM_V2:
@@ -1369,6 +1359,42 @@ namespace ORTS.Scripting.Script
                                 // BP DM
                                 case BP_DM:
                                     TVMArmed = false;
+                                    break;
+                            }
+                        }
+                    }
+                    break;
+
+                case TCSEvent.GenericTCSSwitchOn:
+                    {
+                        int tcsButton = -1;
+                        if (Int32.TryParse(message, out tcsButton))
+                        {
+                            SetCabDisplayControl(tcsButton, 1);
+
+                            switch (tcsButton)
+                            {
+                                // Z (ES) VA
+                                case Z_ES_VA:
+                                    VACMATest = true;
+                                    break;
+                            }
+                        }
+                    }
+                    break;
+
+                case TCSEvent.GenericTCSSwitchOff:
+                    {
+                        int tcsButton = -1;
+                        if (Int32.TryParse(message, out tcsButton))
+                        {
+                            SetCabDisplayControl(tcsButton, 0);
+
+                            switch (tcsButton)
+                            {
+                                // Z (ES) VA
+                                case Z_ES_VA:
+                                    VACMATest = false;
                                     break;
                             }
                         }
