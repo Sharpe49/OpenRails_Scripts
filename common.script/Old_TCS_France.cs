@@ -237,6 +237,16 @@ namespace ORTS.Scripting.Script
             VACMAReleasedEmergencyTimer = new Timer(this);
             VACMAReleasedEmergencyTimer.Setup(VACMAReleasedEmergencyDelayS);
 
+            // Cabview control names initialization
+            SetCustomizedCabviewControlName(BP_AC_SF, "BP (AC) SF : Acquittement / Acknowledge");
+            SetCustomizedCabviewControlName(BP_A_LS_SF, "BP (A) LS (SF) : Annulation LS (SF) / Cancel LS (SF)");
+            SetCustomizedCabviewControlName(Z_ES_VA, "Z (ES) VA : Essai VACMA / Alerter test");
+            SetCustomizedCabviewControlName(BP_AM_V1, "BP AM V1 : Armement manuel TVM voie 1 / TVM manual arming track 1");
+            SetCustomizedCabviewControlName(BP_AM_V2, "BP AM V2 : Armement manuel TVM voie 2 / TVM manual arming track 2");
+            SetCustomizedCabviewControlName(BP_DM, "BP DM : Désarmement manuel TVM / TVM manual dearming");
+            SetCustomizedCabviewControlName(LS_SF, "LS (SF) : Signal Fermé / Closed Signal");
+            SetCustomizedCabviewControlName(TVM_Mask, "Masque TVM / TVM mask");
+
             Activated = true;
 
             SetNextSignalAspect(Aspect.Clear_1);
