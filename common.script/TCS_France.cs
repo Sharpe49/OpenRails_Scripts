@@ -458,14 +458,14 @@ namespace ORTS.Scripting.Script
                     UpdateRSO();
                 }
 
-                if (KVBPresent)
-                {
-                    UpdateKVB();
-                }
-
                 if (TVM300Present || TVM430Present)
                 {
                     UpdateTVM();
+                }
+
+                if (KVBPresent)
+                {
+                    UpdateKVB();
                 }
 
                 if (RSOEmergencyBraking
@@ -490,6 +490,8 @@ namespace ORTS.Scripting.Script
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);
                 RSOType3Inhibition = (!TVM300Present && !TVM430Present) || !TVMCOVITInhibited;
+
+                PreviousLineSpeed = CurrentPostSpeedLimitMpS();
             }
         }
 
@@ -650,57 +652,67 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateKVB()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) || TVMArmed)
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f)
             {
                 KVBMode = KVBModeType.HighSpeedLine;
-
-                KVBSpeedTooHighLight = false;
-
-                ResetKVBTargets();
-
-                if ((!TVM300Present && !TVM430Present) || !TVMArmed)
-                {
-                    KVBState = KVBStateType.Emergency;
-                    KVBEmergencyBrakeLight = true;
-                }
-                else
-                {
-                    if (RearmingButton)
-                    {
-                        KVBState = KVBStateType.Normal;
-                    }
-
-                    KVBEmergencyBrakeLight = false;
-                }
-
-                UpdateKVBDisplay();
             }
-            else
+            else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
             {
                 KVBMode = KVBModeType.ConventionalLine;
+            }
 
-                UpdateKVBParameters();
+            switch (KVBMode)
+            {
 
-                UpdateKVBTargets();
+                case KVBModeType.HighSpeedLine:
+                    KVBSpeedTooHighLight = false;
 
-                UpdateKVBSpeedControl();
+                    ResetKVBTargets();
 
-                UpdateKVBDisplay();
+                    if ((!TVM300Present && !TVM430Present) || !TVMArmed)
+                    {
+                        KVBState = KVBStateType.Emergency;
+                        KVBEmergencyBrakeLight = true;
+                    }
+                    else
+                    {
+                        if (RearmingButton)
+                        {
+                            KVBState = KVBStateType.Normal;
+                        }
 
-                // Send data to the simulator
-                if (KVBStopTargetSignalNumber == 0)
-                {
-                    SetNextSpeedLimitMpS(0f);
-                }
-                else if (KVBSpeedRestrictionTargetSignalNumber == 0)
-                {
-                    SetNextSpeedLimitMpS(KVBSpeedRestrictionTargetSpeedMpS);
-                }
-                else
-                {
-                    SetNextSpeedLimitMpS(KVBNextLineSpeedLimitMpS);
-                }
-                SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
+                        KVBEmergencyBrakeLight = false;
+                    }
+
+                    UpdateKVBDisplay();
+                    break;
+
+                case KVBModeType.ConventionalLine:
+                    KVBMode = KVBModeType.ConventionalLine;
+
+                    UpdateKVBParameters();
+
+                    UpdateKVBTargets();
+
+                    UpdateKVBSpeedControl();
+
+                    UpdateKVBDisplay();
+
+                    // Send data to the simulator
+                    if (KVBStopTargetSignalNumber == 0)
+                    {
+                        SetNextSpeedLimitMpS(0f);
+                    }
+                    else if (KVBSpeedRestrictionTargetSignalNumber == 0)
+                    {
+                        SetNextSpeedLimitMpS(KVBSpeedRestrictionTargetSpeedMpS);
+                    }
+                    else
+                    {
+                        SetNextSpeedLimitMpS(KVBNextLineSpeedLimitMpS);
+                    }
+                    SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
+                    break;
             }
         }
 
@@ -1101,7 +1113,8 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && !TVMArmed)
+            // Automatic arming
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
             {
                 TVMArmed = true;
 
@@ -1110,12 +1123,11 @@ namespace ORTS.Scripting.Script
                 SetNextSignalAspect(NextSignalAspect(0));
             }
 
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && TVMArmed)
+            // Automatic dearming
+            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f && TVMArmed)
             {
                 TVMArmed = false;
             }
-
-            PreviousLineSpeed = CurrentPostSpeedLimitMpS();
 
             if (TVMArmed)
             {

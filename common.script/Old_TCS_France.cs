@@ -305,6 +305,8 @@ namespace ORTS.Scripting.Script
                 RSType1Inhibition = IsDirectionReverse();
                 RSType2Inhibition = TVM300Present && TVMArmed;
                 RSType3Inhibition = !TVM300Present || !TVMCOVITInhibited;
+
+                PreviousLineSpeed = CurrentPostSpeedLimitMpS();
             }
         }
 
@@ -464,7 +466,8 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && !TVMArmed)
+            // Automatic arming
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
             {
                 TVMArmed = true;
 
@@ -473,12 +476,11 @@ namespace ORTS.Scripting.Script
                 SetNextSignalAspect(NextSignalAspect(0));
             }
 
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && TVMArmed)
+            // Automatic dearming
+            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f && TVMArmed)
             {
                 TVMArmed = false;
             }
-
-            PreviousLineSpeed = CurrentPostSpeedLimitMpS();
 
             if (TVMArmed)
             {
