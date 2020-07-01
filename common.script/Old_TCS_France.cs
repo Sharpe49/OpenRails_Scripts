@@ -23,26 +23,6 @@ using System.Collections.Generic;
 
 namespace ORTS.Scripting.Script
 {
-    // Different from TCS France in order not to have conflict
-    // TODO : Integrate the blinker inside the simulator
-    public class OldBlinker
-    {
-        float StartValue;
-        protected Func<float> CurrentValue;
-
-        public float FrequencyHz { get; private set; }
-        public bool Started { get; private set; }
-        public void Setup(float frequencyHz) { FrequencyHz = frequencyHz; }
-        public void Start() { StartValue = CurrentValue(); Started = true; }
-        public void Stop() { Started = false; }
-        public bool On { get { return Started && ((CurrentValue() - StartValue) % (1f / FrequencyHz)) * FrequencyHz * 2f < 1f; } }
-
-        public OldBlinker(AbstractScriptClass asc)
-        {
-            CurrentValue = asc.GameTime;
-        }
-    }
-
     public class Old_TCS_France : TrainControlSystem
     {
         // Cabview control number
@@ -106,7 +86,7 @@ namespace ORTS.Scripting.Script
         bool RSPreviousClosedSignal = false;
         bool RSOpenedSignal = false;
         bool RSPreviousOpenedSignal = false;
-        OldBlinker RSBlinker;
+        Blinker RSBlinker;
         Timer RSEmergencyTimer;
 
     // DAAT (Dispositif d'Arrêt Automatique des Trains / Automatic Train Stop System)
@@ -223,7 +203,7 @@ namespace ORTS.Scripting.Script
             VACMAPressedEmergencyDelayS = GetFloatParameter("VACMA", "PressedEmergencyDelayS", 60f);
 
             // Variables initialization
-            RSBlinker = new OldBlinker(this);
+            RSBlinker = new Blinker(this);
             RSBlinker.Setup(RSBlinkerFrequencyHz);
             RSBlinker.Start();
             RSEmergencyTimer = new Timer(this);
