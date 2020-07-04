@@ -1032,17 +1032,20 @@ namespace ORTS.Scripting.Script
         {
             SetOverspeedWarningDisplay(KVBState >= KVBStateType.Alert);
 
-            if (KVBPreAnnounce == KVBPreAnnounceType.Armed)
+            if (KVBMode != KVBModeType.HighSpeedLine)
             {
-                SetNextSignalAspect(Aspect.Clear_2);
-            }
-            else if (KVBStopTargetReleaseSpeed == KVBReleaseSpeed.V10)
-            {
-                SetNextSignalAspect(Aspect.Stop);
-            }
-            else
-            {
-                SetNextSignalAspect(Aspect.Clear_1);
+                if (KVBPreAnnounce == KVBPreAnnounceType.Armed)
+                {
+                    SetNextSignalAspect(Aspect.Clear_2);
+                }
+                else if (KVBStopTargetReleaseSpeed == KVBReleaseSpeed.V10)
+                {
+                    SetNextSignalAspect(Aspect.Stop);
+                }
+                else
+                {
+                    SetNextSignalAspect(Aspect.Clear_1);
+                }
             }
 
             // VY SOS KVB
