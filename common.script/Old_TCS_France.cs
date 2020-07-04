@@ -232,22 +232,21 @@ namespace ORTS.Scripting.Script
             SetNextSignalAspect(Aspect.Clear_1);
         }
 
+        public override void InitializeMoving()
+        {
+            RSState = RSStateType.Off;
+            RSEmergencyBraking = false;
+            VACMAEmergencyBraking = false;
+
+            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f))
+            {
+                TVMArmed = true;
+                UpdateTVMAspect(NextSignalAspect(0), false);
+            }
+        }
+
         public override void Update()
         {
-            if (InitCount < 5)
-            {
-                InitCount++;
-
-                if (InitCount == 5 && SpeedMpS() > 0f)
-                {
-                    RSState = RSStateType.Off;
-                    RSEmergencyBraking = false;
-                    VACMAEmergencyBraking = false;
-                }
-
-                return;
-            }
-
             UpdateSignalPassed();
 
             UpdateVACMA();
@@ -450,10 +449,7 @@ namespace ORTS.Scripting.Script
             if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
             {
                 TVMArmed = true;
-
-                TVMPreviousAspect = NextSignalAspect(0);
-                TVMAspect = NextSignalAspect(0);
-                SetNextSignalAspect(NextSignalAspect(0));
+                UpdateTVMAspect(NextSignalAspect(0), false);
             }
 
             // Automatic dearming
@@ -485,13 +481,13 @@ namespace ORTS.Scripting.Script
             UpdateTVMAspect(NextSignalAspect(0));
         }
 
-        protected void UpdateTVMAspect(Aspect aspect)
+        protected void UpdateTVMAspect(Aspect aspect, bool updateRSO = true)
         {
             TVMPreviousAspect = TVMAspect;
             TVMAspect = aspect;
             SetNextSignalAspect(aspect);
 
-            if (TVMAspect != Aspect.None && TVMPreviousAspect != Aspect.None)
+            if (updateRSO && TVMAspect != Aspect.None && TVMPreviousAspect != Aspect.None)
             {
                 TVMClosedSignal = (TVMPreviousAspect < TVMAspect);
                 TVMOpenedSignal = (TVMPreviousAspect > TVMAspect);
@@ -603,7 +599,11 @@ namespace ORTS.Scripting.Script
                                 // BP AM V1 and BP AM V2
                                 case BP_AM_V1:
                                 case BP_AM_V2:
-                                    TVMArmed = true;
+                                    if (!TVMArmed)
+                                    {
+                                        TVMArmed = true;
+                                        UpdateTVMAspect(NextSignalAspect(0), false);
+                                    }
                                     break;
 
                                 // BP DM
