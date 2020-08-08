@@ -429,38 +429,26 @@ namespace ORTS.Scripting.Script
 
         public override void Update()
         {
-            if (InitCount < 5)
+            if (IsTrainControlEnabled())
             {
-                InitCount++;
-
-                if (InitCount == 5 && CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f))
+                if (InitCount < 5)
                 {
-                    KVBMode = KVBModeType.HighSpeedLine;
+                    InitCount++;
+
+                    if (InitCount == 5 && CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f))
+                    {
+                        KVBMode = KVBModeType.HighSpeedLine;
+                    }
+
+                    return;
                 }
 
-                return;
-            }
+                UpdateSignalPassed();
 
-            UpdateSignalPassed();
-
-            UpdateVACMA();
-
-            if (IsTrainControlEnabled() && IsSpeedControlEnabled())
-            {
-                if (RSOPresent)
-                {
-                    UpdateRSO();
-                }
-
-                if (TVM300Present || TVM430Present)
-                {
-                    UpdateTVM();
-                }
-
-                if (KVBPresent)
-                {
-                    UpdateKVB();
-                }
+                UpdateVACMA();
+                UpdateRSO();
+                UpdateTVM();
+                UpdateKVB();
 
                 if (RSOEmergencyBraking
                     || KVBState == KVBStateType.Emergency
@@ -496,217 +484,223 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateRSO()
         {
-            // If train is about to cross a normal signal, get its information.
-            float nextNormalSignalDistance = NextSignalDistanceM(0);
-            if (nextNormalSignalDistance <= 5f)
+            if (RSOPresent && IsSpeedControlEnabled())
             {
-                RSOLastSignalAspect = NextSignalAspect(0);
-            }
-
-            // If train is about to cross a normal signal, get its information.
-            float nextDistantSignalDistance = NextDistanceSignalDistanceM();
-            if (nextDistantSignalDistance <= 5f)
-            {
-                RSOLastSignalAspect = NextDistanceSignalAspect();
-            }
-
-            RSOClosedSignal = RSOOpenedSignal = false;
-
-            if ((NormalSignalPassed || DistantSignalPassed)
-                && !RSOType1Inhibition
-                && !TVMArmed
-                && SpeedMpS() > 0.1f)
-            {
-                if (RSOLastSignalAspect == Aspect.Stop
-                    || RSOLastSignalAspect == Aspect.StopAndProceed
-                    || RSOLastSignalAspect == Aspect.Restricted
-                    || RSOLastSignalAspect == Aspect.Approach_1
-                    || RSOLastSignalAspect == Aspect.Approach_2
-                    || RSOLastSignalAspect == Aspect.Approach_3
-                    )
+                // If train is about to cross a normal signal, get its information.
+                float nextNormalSignalDistance = NextSignalDistanceM(0);
+                if (nextNormalSignalDistance <= 5f)
                 {
-                    RSOClosedSignal = true;
+                    RSOLastSignalAspect = NextSignalAspect(0);
                 }
-                else
+
+                // If train is about to cross a normal signal, get its information.
+                float nextDistantSignalDistance = NextDistanceSignalDistanceM();
+                if (nextDistantSignalDistance <= 5f)
                 {
-                    RSOOpenedSignal = true;
+                    RSOLastSignalAspect = NextDistanceSignalAspect();
                 }
-            }
 
-            switch (RSOState)
-            {
-                case RSOStateType.Off:
-                    SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
-                    if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                RSOClosedSignal = RSOOpenedSignal = false;
+
+                if ((NormalSignalPassed || DistantSignalPassed)
+                    && !RSOType1Inhibition
+                    && !TVMArmed
+                    && SpeedMpS() > 0.1f)
+                {
+                    if (RSOLastSignalAspect == Aspect.Stop
+                        || RSOLastSignalAspect == Aspect.StopAndProceed
+                        || RSOLastSignalAspect == Aspect.Restricted
+                        || RSOLastSignalAspect == Aspect.Approach_1
+                        || RSOLastSignalAspect == Aspect.Approach_2
+                        || RSOLastSignalAspect == Aspect.Approach_3
+                        )
                     {
-                        if (RSOPressed)
+                        RSOClosedSignal = true;
+                    }
+                    else
+                    {
+                        RSOOpenedSignal = true;
+                    }
+                }
+
+                switch (RSOState)
+                {
+                    case RSOStateType.Off:
+                        SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
+                        if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
                         {
-                            RSOState = RSOStateType.TriggeredPressed;
+                            if (RSOPressed)
+                            {
+                                RSOState = RSOStateType.TriggeredPressed;
+                            }
+                            else
+                            {
+                                RSOState = RSOStateType.TriggeredBlinking;
+                                RSOBlinker.Start();
+                                RSOEmergencyTimer.Start();
+                            }
                         }
-                        else
+                        break;
+
+                    case RSOStateType.TriggeredPressed:
+                        SetCabDisplayControl(LS_SF, 0);
+
+                        if (!RSOPressed)
                         {
-                            RSOState = RSOStateType.TriggeredBlinking;
-                            RSOBlinker.Start();
-                            RSOEmergencyTimer.Start();
+                            RSOState = RSOStateType.TriggeredFixed;
                         }
-                    }
-                    break;
 
-                case RSOStateType.TriggeredPressed:
-                    SetCabDisplayControl(LS_SF, 0);
-
-                    if (!RSOPressed)
-                    {
-                        RSOState = RSOStateType.TriggeredFixed;
-                    }
-
-                    if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                    {
-                        RSOState = RSOStateType.Off;
-                    }
-                    break;
-
-                case RSOStateType.TriggeredBlinking:
-                    // LS (SF)
-                    SetCabDisplayControl(LS_SF, RSOBlinker.On ? 1 : 0);
-
-                    if (!RSOPressed && RSOPreviousPressed)
-                    {
-                        RSOState = RSOStateType.TriggeredFixed;
-                        RSOEmergencyTimer.Stop();
-                    }
-
-                    if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                    {
-                        RSOState = RSOStateType.Off;
-                        RSOEmergencyTimer.Stop();
-                    }
-                    break;
-
-                case RSOStateType.TriggeredFixed:
-                    SetCabDisplayControl(LS_SF, 1);
-
-                    if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
-                    {
-                        if (RSOPressed)
+                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
                         {
-                            RSOState = RSOStateType.TriggeredPressed;
+                            RSOState = RSOStateType.Off;
                         }
-                        else
+                        break;
+
+                    case RSOStateType.TriggeredBlinking:
+                        // LS (SF)
+                        SetCabDisplayControl(LS_SF, RSOBlinker.On ? 1 : 0);
+
+                        if (!RSOPressed && RSOPreviousPressed)
                         {
-                            RSOState = RSOStateType.TriggeredBlinking;
-                            RSOBlinker.Start();
-                            RSOEmergencyTimer.Start();
+                            RSOState = RSOStateType.TriggeredFixed;
+                            RSOEmergencyTimer.Stop();
                         }
-                    }
 
-                    if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                    {
-                        RSOState = RSOStateType.Off;
-                    }
-                    break;
-            }
+                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
+                        {
+                            RSOState = RSOStateType.Off;
+                            RSOEmergencyTimer.Stop();
+                        }
+                        break;
 
-            if (RSOEmergencyTimer.Triggered)
-            {
-                RSOEmergencyBraking = true;
-            }
-            else if (RearmingButton)
-            {
-                RSOEmergencyBraking = false;
-            }
+                    case RSOStateType.TriggeredFixed:
+                        SetCabDisplayControl(LS_SF, 1);
 
-            SetCabDisplayControl(VY_SOS_RSO, RSOEmergencyBraking ? 1 : 0);
+                        if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                        {
+                            if (RSOPressed)
+                            {
+                                RSOState = RSOStateType.TriggeredPressed;
+                            }
+                            else
+                            {
+                                RSOState = RSOStateType.TriggeredBlinking;
+                                RSOBlinker.Start();
+                                RSOEmergencyTimer.Start();
+                            }
+                        }
 
-            if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
-            {
-                TriggerSoundInfo1();
-            }
+                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
+                        {
+                            RSOState = RSOStateType.Off;
+                        }
+                        break;
+                }
 
-            RSOPreviousClosedSignal = RSOClosedSignal;
+                if (RSOEmergencyTimer.Triggered)
+                {
+                    RSOEmergencyBraking = true;
+                }
+                else if (RearmingButton)
+                {
+                    RSOEmergencyBraking = false;
+                }
 
-            if (TVM300Present || TVM430Present)
-            {
-                if (TVMClosedSignal && !TVMPreviousClosedSignal)
+                SetCabDisplayControl(VY_SOS_RSO, RSOEmergencyBraking ? 1 : 0);
+
+                if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
                 {
                     TriggerSoundInfo1();
                 }
 
-                if (TVMOpenedSignal && !TVMPreviousOpenedSignal)
+                RSOPreviousClosedSignal = RSOClosedSignal;
+
+                if (TVM300Present || TVM430Present)
                 {
-                    TriggerSoundInfo1();
+                    if (TVMClosedSignal && !TVMPreviousClosedSignal)
+                    {
+                        TriggerSoundInfo1();
+                    }
+
+                    if (TVMOpenedSignal && !TVMPreviousOpenedSignal)
+                    {
+                        TriggerSoundInfo1();
+                    }
+
+                    TVMPreviousClosedSignal = TVMClosedSignal;
+                    TVMPreviousOpenedSignal = TVMOpenedSignal;
                 }
 
-                TVMPreviousClosedSignal = TVMClosedSignal;
-                TVMPreviousOpenedSignal = TVMOpenedSignal;
+                RSOPreviousPressed = RSOPressed;
             }
-
-            RSOPreviousPressed = RSOPressed;
         }
 
         protected void UpdateKVB()
         {
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f)
+            if (KVBPresent && IsSpeedControlEnabled())
             {
-                KVBMode = KVBModeType.HighSpeedLine;
-            }
-            else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
-            {
-                KVBMode = KVBModeType.ConventionalLine;
-            }
+                if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f)
+                {
+                    KVBMode = KVBModeType.HighSpeedLine;
+                }
+                else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
+                {
+                    KVBMode = KVBModeType.ConventionalLine;
+                }
 
-            switch (KVBMode)
-            {
+                switch (KVBMode)
+                {
 
-                case KVBModeType.HighSpeedLine:
-                    KVBSpeedTooHighLight = false;
+                    case KVBModeType.HighSpeedLine:
+                        KVBSpeedTooHighLight = false;
 
-                    ResetKVBTargets();
+                        ResetKVBTargets();
 
-                    if ((!TVM300Present && !TVM430Present) || !TVMArmed)
-                    {
-                        KVBState = KVBStateType.Emergency;
-                        KVBEmergencyBrakeLight = true;
-                    }
-                    else
-                    {
-                        if (RearmingButton)
+                        if ((!TVM300Present && !TVM430Present) || !TVMArmed)
                         {
-                            KVBState = KVBStateType.Normal;
+                            KVBState = KVBStateType.Emergency;
+                            KVBEmergencyBrakeLight = true;
+                        }
+                        else
+                        {
+                            if (RearmingButton)
+                            {
+                                KVBState = KVBStateType.Normal;
+                            }
+
+                            KVBEmergencyBrakeLight = false;
                         }
 
-                        KVBEmergencyBrakeLight = false;
-                    }
+                        UpdateKVBDisplay();
+                        break;
 
-                    UpdateKVBDisplay();
-                    break;
+                    case KVBModeType.ConventionalLine:
+                        KVBMode = KVBModeType.ConventionalLine;
 
-                case KVBModeType.ConventionalLine:
-                    KVBMode = KVBModeType.ConventionalLine;
+                        UpdateKVBParameters();
 
-                    UpdateKVBParameters();
+                        UpdateKVBTargets();
 
-                    UpdateKVBTargets();
+                        UpdateKVBSpeedControl();
 
-                    UpdateKVBSpeedControl();
+                        UpdateKVBDisplay();
 
-                    UpdateKVBDisplay();
-
-                    // Send data to the simulator
-                    if (KVBStopTargetSignalNumber == 0)
-                    {
-                        SetNextSpeedLimitMpS(0f);
-                    }
-                    else if (KVBSpeedRestrictionTargetSignalNumber == 0)
-                    {
-                        SetNextSpeedLimitMpS(KVBSpeedRestrictionTargetSpeedMpS);
-                    }
-                    else
-                    {
-                        SetNextSpeedLimitMpS(KVBNextLineSpeedLimitMpS);
-                    }
-                    SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
-                    break;
+                        // Send data to the simulator
+                        if (KVBStopTargetSignalNumber == 0)
+                        {
+                            SetNextSpeedLimitMpS(0f);
+                        }
+                        else if (KVBSpeedRestrictionTargetSignalNumber == 0)
+                        {
+                            SetNextSpeedLimitMpS(KVBSpeedRestrictionTargetSpeedMpS);
+                        }
+                        else
+                        {
+                            SetNextSpeedLimitMpS(KVBNextLineSpeedLimitMpS);
+                        }
+                        SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
+                        break;
+                }
             }
         }
 
@@ -1110,42 +1104,51 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateTVM()
         {
-            // Automatic arming
-            if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
+            if ((TVM300Present || TVM430Present) && IsSpeedControlEnabled())
             {
-                TVMArmed = true;
-                UpdateTVMAspect(NextSignalAspect(0), false);
-            }
-
-            // Automatic dearming
-            if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f && TVMArmed)
-            {
-                TVMArmed = false;
-            }
-
-            if (TVMArmed)
-            {
-                // TVM mask
-                SetCabDisplayControl(TVM_Mask, 1);
-
-                if (TVM300Present)
+                // Automatic arming
+                if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
                 {
-                    UpdateTVM300Display();
-                    UpdateTVM300COVIT();
+                    TVMArmed = true;
+                    UpdateTVMAspect(NextSignalAspect(0), false);
                 }
-                else if (TVM430Present)
+
+                // Automatic dearming
+                if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f && TVMArmed)
                 {
-                    UpdateTVM430Display();
-                    UpdateTVM430COVIT();
+                    TVMArmed = false;
+                    TVMCOVITEmergencyBraking = false;
+                }
+
+                if (TVMArmed)
+                {
+                    // TVM mask
+                    SetCabDisplayControl(TVM_Mask, 1);
+
+                    if (TVM300Present)
+                    {
+                        UpdateTVM300Display();
+                        UpdateTVM300COVIT();
+                    }
+                    else if (TVM430Present)
+                    {
+                        UpdateTVM430Display();
+                        UpdateTVM430COVIT();
+                    }
+                }
+                else
+                {
+                    // TVM mask
+                    SetCabDisplayControl(TVM_Mask, 0);
+
+                    TVMAspect = Aspect.None;
+                    TVMPreviousAspect = Aspect.None;
                 }
             }
             else
             {
-                // TVM mask
-                SetCabDisplayControl(TVM_Mask, 0);
-
-                TVMAspect = Aspect.None;
-                TVMPreviousAspect = Aspect.None;
+                TVMArmed = false;
+                TVMCOVITEmergencyBraking = false;
             }
         }
 
@@ -1432,7 +1435,7 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (VACMAPresent && Activated && IsTrainControlEnabled() && IsAlerterEnabled())
+            if (VACMAPresent && Activated && IsAlerterEnabled())
             {
                 if (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest)
                 {
