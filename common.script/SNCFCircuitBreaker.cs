@@ -103,30 +103,42 @@ namespace ORTS.Scripting.Script
             switch (evt)
             {
                 case PowerSupplyEvent.CloseCircuitBreakerButtonPressed:
-                    SetDriverClosingOrder(true);
-                    SignalEvent(Event.CircuitBreakerClosingOrderOn);
-                    Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
-                    if (!ClosingAuthorization())
+                    if (!DriverClosingOrder())
                     {
-                        Message(ConfirmLevel.Warning, "Circuit breaker closing not authorized / Fermeture du disjoncteur non autorisée");
+                        SetDriverClosingOrder(true);
+                        SignalEvent(Event.CircuitBreakerClosingOrderOn);
+                        Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
+                        if (!ClosingAuthorization())
+                        {
+                            Message(ConfirmLevel.Warning, "Circuit breaker closing not authorized / Fermeture du disjoncteur non autorisée");
+                        }
                     }
                     break;
 
                 case PowerSupplyEvent.CloseCircuitBreakerButtonReleased:
-                    SetDriverClosingOrder(false);
-                    SignalEvent(Event.CircuitBreakerClosingOrderOff);
+                    if (DriverClosingOrder())
+                    {
+                        SetDriverClosingOrder(false);
+                        SignalEvent(Event.CircuitBreakerClosingOrderOff);
+                    }
                     break;
 
                 case PowerSupplyEvent.GiveCircuitBreakerClosingAuthorization:
-                    SetDriverClosingAuthorization(true);
-                    SignalEvent(Event.CircuitBreakerClosingAuthorizationOn);
-                    Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.On);
+                    if (!DriverClosingAuthorization())
+                    {
+                        SetDriverClosingAuthorization(true);
+                        SignalEvent(Event.CircuitBreakerClosingAuthorizationOn);
+                        Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.On);
+                    }
                     break;
 
                 case PowerSupplyEvent.RemoveCircuitBreakerClosingAuthorization:
-                    SetDriverClosingAuthorization(false);
-                    SignalEvent(Event.CircuitBreakerClosingAuthorizationOff);
-                    Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.Off);
+                    if (DriverClosingAuthorization())
+                    {
+                        SetDriverClosingAuthorization(false);
+                        SignalEvent(Event.CircuitBreakerClosingAuthorizationOff);
+                        Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.Off);
+                    }
                     break;
             }
         }
