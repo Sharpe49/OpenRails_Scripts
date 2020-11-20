@@ -152,7 +152,11 @@ namespace ORTS.Scripting.Script
         float KVBDelayBeforeBrakingEstablishedS;            // Tbo
 
         // Variables
+        bool KVBSpadEmergency = false;
+        bool KVBOverspeedEmergency = false;
+        bool KVBKarmEmergency = false;
         KVBStateType KVBState = KVBStateType.Emergency;
+        bool KVBEmergencyBraking = true;
         KVBPreAnnounceType KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
         KVBModeType KVBMode = KVBModeType.ConventionalLine;
 
@@ -417,6 +421,7 @@ namespace ORTS.Scripting.Script
             RSOState = RSOStateType.Off;
             RSOEmergencyBraking = false;
             KVBState = KVBStateType.Normal;
+            KVBEmergencyBraking = false;
             VACMAEmergencyBraking = false;
 
             if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f))
@@ -451,7 +456,7 @@ namespace ORTS.Scripting.Script
                 UpdateKVB();
 
                 if (RSOEmergencyBraking
-                    || KVBState == KVBStateType.Emergency
+                    || KVBEmergencyBraking
                     || TVMCOVITEmergencyBraking
                     || VACMAEmergencyBraking
                     || ExternalEmergencyBraking)
@@ -641,35 +646,27 @@ namespace ORTS.Scripting.Script
             {
                 if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f)
                 {
+                    KVBSpadEmergency = false;
+                    KVBOverspeedEmergency = false;
+                    KVBSpeedTooHighLight = false;
+
                     KVBMode = KVBModeType.HighSpeedLine;
                 }
                 else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
                 {
+                    KVBKarmEmergency = false;
+
                     KVBMode = KVBModeType.ConventionalLine;
                 }
 
                 switch (KVBMode)
                 {
-
                     case KVBModeType.HighSpeedLine:
-                        KVBSpeedTooHighLight = false;
-
                         ResetKVBTargets();
 
-                        if ((!TVM300Present && !TVM430Present) || !TVMArmed)
-                        {
-                            KVBState = KVBStateType.Emergency;
-                            KVBEmergencyBrakeLight = true;
-                        }
-                        else
-                        {
-                            if (RearmingButton)
-                            {
-                                KVBState = KVBStateType.Normal;
-                            }
+                        KVBKarmEmergency = (!TVM300Present && !TVM430Present) || !TVMArmed;
 
-                            KVBEmergencyBrakeLight = false;
-                        }
+                        UpdateKVBEmergencyBraking();
 
                         UpdateKVBDisplay();
                         break;
@@ -682,6 +679,8 @@ namespace ORTS.Scripting.Script
                         UpdateKVBTargets();
 
                         UpdateKVBSpeedControl();
+
+                        UpdateKVBEmergencyBraking();
 
                         UpdateKVBDisplay();
 
@@ -755,14 +754,10 @@ namespace ORTS.Scripting.Script
                 // Signal passed at danger check
                 if (KVBLastSignalAspect == Aspect.Stop)
                 {
-                    KVBState = KVBStateType.Emergency;
+                    KVBSpadEmergency = true;
                     TriggerSoundPenalty2();
                     Message(ConfirmLevel.Warning, "SOS KVB");
                     Message(ConfirmLevel.Warning, "KVB : Franchissement carré / Signal passed at danger");
-
-                    // On sight till the end of the block section
-                    KVBOnSight = true;
-                    KVBLastSignalSpeedLimitMpS = MpS.FromKpH(30);
                 }
                 else if (KVBLastSignalAspect == Aspect.StopAndProceed)
                 {
@@ -916,6 +911,7 @@ namespace ORTS.Scripting.Script
 
             bool alert = false;
             bool emergency = false;
+            KVBSpeedTooHighLight = false;
 
             // Train speed limit
             alert |= SpeedMpS() > KVBTrainSpeedLimitMpS + MpS.FromKpH(5f);
@@ -1026,11 +1022,50 @@ namespace ORTS.Scripting.Script
                     break;
 
                 case KVBStateType.Emergency:
-                    if (SpeedMpS() < 0.1f && RearmingButton)
+                    if (SpeedMpS() < 0.1f)
                     {
                         KVBState = KVBStateType.Normal;
                     }
                     break;
+            }
+
+            KVBOverspeedEmergency = KVBState == KVBStateType.Emergency;
+        }
+
+        protected void UpdateKVBEmergencyBraking()
+        {
+            if (KVBSpadEmergency && SpeedMpS() < 0.1f)
+            {
+                KVBSpadEmergency = false;
+            }
+
+            if (KVBOverspeedEmergency && SpeedMpS() < 0.1f)
+            {
+                KVBOverspeedEmergency = false;
+            }
+
+            if (KVBKarmEmergency && TVMArmed)
+            {
+                KVBKarmEmergency = false;
+            }
+
+            if (!KVBEmergencyBraking)
+            {
+                if (KVBSpadEmergency || KVBOverspeedEmergency || KVBKarmEmergency)
+                {
+                    KVBEmergencyBraking = true;
+                }
+            }
+            else
+            {
+                if (!KVBSpadEmergency && !KVBOverspeedEmergency && !KVBKarmEmergency && RearmingButton)
+                {
+                    KVBEmergencyBraking = false;
+
+                    // On sight till the end of the block section
+                    KVBOnSight = true;
+                    KVBLastSignalSpeedLimitMpS = MpS.FromKpH(30);
+                }
             }
         }
 
@@ -1055,12 +1090,13 @@ namespace ORTS.Scripting.Script
             }
 
             // VY SOS KVB
-            SetCabDisplayControl(VY_SOS_KVB, KVBState == KVBStateType.Emergency ? 1 : 0);
+            SetCabDisplayControl(VY_SOS_KVB, KVBEmergencyBraking ? 1 : 0);
 
             // VY VTE
             SetCabDisplayControl(VY_VTE, KVBSpeedTooHighLight ? 1 : 0);
 
             // VY FU
+            KVBEmergencyBrakeLight = KVBSpadEmergency || KVBOverspeedEmergency || KVBKarmEmergency;
             SetCabDisplayControl(VY_FU, KVBEmergencyBrakeLight ? 1 : 0);
         }
 
