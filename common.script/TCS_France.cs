@@ -53,6 +53,7 @@ namespace ORTS.Scripting.Script
 
         enum RSOStateType
         {
+            Init,
             Off,
             TriggeredPressed,
             TriggeredBlinking,
@@ -125,7 +126,7 @@ namespace ORTS.Scripting.Script
         float RSOBlinkerFrequencyHz;
 
         // Variables
-        RSOStateType RSOState = RSOStateType.TriggeredBlinking;
+        RSOStateType RSOState = RSOStateType.Init;
         Aspect RSOLastSignalAspect = Aspect.Clear_1;
         bool RSOEmergencyBraking = true;
         bool RSOPressed = false;
@@ -528,23 +529,42 @@ namespace ORTS.Scripting.Script
                     }
                 }
 
+                if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                {
+                    RSOEmergencyTimer.Start();
+
+                    if (RSOPressed)
+                    {
+                        RSOState = RSOStateType.TriggeredPressed;
+                    }
+                    else
+                    {
+                        RSOState = RSOStateType.TriggeredBlinking;
+                    }
+                }
+
+                if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
+                {
+                    RSOEmergencyTimer.Stop();
+                    RSOState = RSOStateType.Off;
+                }
+
                 switch (RSOState)
                 {
-                    case RSOStateType.Off:
-                        SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
-                        if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                    case RSOStateType.Init:
+                        if (!RSOBlinker.Started)
                         {
-                            if (RSOPressed)
-                            {
-                                RSOState = RSOStateType.TriggeredPressed;
-                            }
-                            else
-                            {
-                                RSOState = RSOStateType.TriggeredBlinking;
-                                RSOBlinker.Start();
-                                RSOEmergencyTimer.Start();
-                            }
+                            RSOBlinker.Start();
                         }
+                        SetCabDisplayControl(LS_SF, RSOBlinker.On || RSOPressed ? 1 : 0);
+                        break;
+
+                    case RSOStateType.Off:
+                        if (RSOBlinker.Started)
+                        {
+                            RSOBlinker.Stop();
+                        }
+                        SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
                         break;
 
                     case RSOStateType.TriggeredPressed:
@@ -553,16 +573,15 @@ namespace ORTS.Scripting.Script
                         if (!RSOPressed)
                         {
                             RSOState = RSOStateType.TriggeredFixed;
-                        }
-
-                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                        {
-                            RSOState = RSOStateType.Off;
+                            RSOEmergencyTimer.Stop();
                         }
                         break;
 
                     case RSOStateType.TriggeredBlinking:
-                        // LS (SF)
+                        if (!RSOBlinker.Started)
+                        {
+                            RSOBlinker.Start();
+                        }
                         SetCabDisplayControl(LS_SF, RSOBlinker.On ? 1 : 0);
 
                         if (!RSOPressed && RSOPreviousPressed)
@@ -570,35 +589,10 @@ namespace ORTS.Scripting.Script
                             RSOState = RSOStateType.TriggeredFixed;
                             RSOEmergencyTimer.Stop();
                         }
-
-                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                        {
-                            RSOState = RSOStateType.Off;
-                            RSOEmergencyTimer.Stop();
-                        }
                         break;
 
                     case RSOStateType.TriggeredFixed:
                         SetCabDisplayControl(LS_SF, 1);
-
-                        if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
-                        {
-                            if (RSOPressed)
-                            {
-                                RSOState = RSOStateType.TriggeredPressed;
-                            }
-                            else
-                            {
-                                RSOState = RSOStateType.TriggeredBlinking;
-                                RSOBlinker.Start();
-                                RSOEmergencyTimer.Start();
-                            }
-                        }
-
-                        if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
-                        {
-                            RSOState = RSOStateType.Off;
-                        }
                         break;
                 }
 

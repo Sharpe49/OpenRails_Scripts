@@ -327,65 +327,55 @@ namespace ORTS.Scripting.Script
                     }
                 }
 
+                if ((RSClosedSignal && !RSType2Inhibition) || (TVMClosedSignal && !RSType3Inhibition))
+                {
+                    if (RSPressed)
+                    {
+                        RSState = RSStateType.TriggeredBlinking;
+                    }
+                    else
+                    {
+                        RSEmergencyTimer.Start();
+                        RSState = RSStateType.TriggeredSounding;
+                    }
+                }
+
+                if (RSOpenedSignal || TVMOpenedSignal || RSCancelPressed)
+                {
+                    RSEmergencyTimer.Stop();
+                    RSState = RSStateType.Off;
+                }
+
                 switch (RSState)
                 {
                     case RSStateType.Off:
-                        SetCabDisplayControl(LS_SF, 0);
-                        if ((RSClosedSignal && !RSType2Inhibition) || (TVMClosedSignal && !RSType3Inhibition))
+                        if (RSBlinker.Started)
                         {
-                            if (RSPressed)
-                            {
-                                RSState = RSStateType.TriggeredBlinking;
-                                RSBlinker.Start();
-                            }
-                            else
-                            {
-                                RSState = RSStateType.TriggeredSounding;
-                                RSBlinker.Start();
-                                RSEmergencyTimer.Start();
-                            }
+                            RSBlinker.Stop();
                         }
+                        SetCabDisplayControl(LS_SF, 0);
                         break;
 
                     case RSStateType.TriggeredSounding:
-                        // LS (SF)
+                        if (!RSBlinker.Started)
+                        {
+                            RSBlinker.Start();
+                        }
                         SetCabDisplayControl(LS_SF, RSBlinker.On ? 1 : 0);
 
                         if (!RSPressed && RSPreviousPressed)
                         {
+                            RSEmergencyTimer.Stop();
                             RSState = RSStateType.TriggeredBlinking;
-                            RSEmergencyTimer.Stop();
-                        }
-
-                        if (RSOpenedSignal || TVMOpenedSignal || RSCancelPressed)
-                        {
-                            RSState = RSStateType.Off;
-                            RSEmergencyTimer.Stop();
-                            RSBlinker.Stop();
                         }
                         break;
 
                     case RSStateType.TriggeredBlinking:
+                        if (!RSBlinker.Started)
+                        {
+                            RSBlinker.Start();
+                        }
                         SetCabDisplayControl(LS_SF, RSBlinker.On ? 1 : 0);
-
-                        if ((RSClosedSignal && !RSType2Inhibition) || (TVMClosedSignal && !RSType3Inhibition))
-                        {
-                            if (RSPressed)
-                            {
-                                RSState = RSStateType.TriggeredBlinking;
-                            }
-                            else
-                            {
-                                RSState = RSStateType.TriggeredSounding;
-                                RSEmergencyTimer.Start();
-                            }
-                        }
-
-                        if (RSOpenedSignal || TVMOpenedSignal || RSCancelPressed)
-                        {
-                            RSState = RSStateType.Off;
-                            RSBlinker.Stop();
-                        }
                         break;
                 }
 
