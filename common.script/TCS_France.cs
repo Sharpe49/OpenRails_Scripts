@@ -161,6 +161,8 @@ namespace ORTS.Scripting.Script
         KVBPreAnnounceType KVBPreAnnounce = KVBPreAnnounceType.Deactivated;
         KVBModeType KVBMode = KVBModeType.ConventionalLine;
 
+        OdoMeter KVBHSLStartOdometer;
+
         Aspect KVBLastSignalAspect = Aspect.Clear_1;
         float KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
 
@@ -360,6 +362,9 @@ namespace ORTS.Scripting.Script
             // KVB section
             KVBInhibited = GetBoolParameter("KVB", "Inhibited", false);
             KVBTrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("KVB", "TrainSpeedLimitKpH", 160f));
+
+            KVBHSLStartOdometer = new OdoMeter(this);
+            KVBHSLStartOdometer.Setup(450f);
 
             // TVM common section
             TVMCOVITInhibited = GetBoolParameter("TVM", "CovitInhibited", false);
@@ -640,13 +645,19 @@ namespace ORTS.Scripting.Script
             {
                 if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f)
                 {
+                    KVBHSLStartOdometer.Start();
+                }
+
+                if (KVBHSLStartOdometer.Triggered && KVBMode != KVBModeType.HighSpeedLine)
+                {
+                    KVBHSLStartOdometer.Stop();
                     KVBSpadEmergency = false;
                     KVBOverspeedEmergency = false;
                     KVBSpeedTooHighLight = false;
 
                     KVBMode = KVBModeType.HighSpeedLine;
                 }
-                else if (CurrentPostSpeedLimitMpS() <= MpS.FromKpH(221f) && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
+                else if (NextPostSpeedLimitMpS(0) <= MpS.FromKpH(221f) && NextPostDistanceM(0) < 60f && PreviousLineSpeed > MpS.FromKpH(221f) && SpeedMpS() > 0f)
                 {
                     KVBKarmEmergency = false;
 
@@ -694,6 +705,10 @@ namespace ORTS.Scripting.Script
                         SetCurrentSpeedLimitMpS(Math.Min(KVBLastSignalSpeedLimitMpS, KVBCurrentLineSpeedLimitMpS));
                         break;
                 }
+            }
+            else
+            {
+                KVBEmergencyBraking = false;
             }
         }
 
@@ -743,7 +758,7 @@ namespace ORTS.Scripting.Script
                 KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
             }
 
-            if (NormalSignalPassed || DistantSignalPassed)
+            if ((NormalSignalPassed || DistantSignalPassed) && SpeedMpS() > 0.1f)
             {
                 // Signal passed at danger check
                 if (KVBLastSignalAspect == Aspect.Stop)
@@ -1130,6 +1145,8 @@ namespace ORTS.Scripting.Script
             KVBCurrentLineSpeedLimitMpS = float.PositiveInfinity;
             KVBNextLineSpeedLimitMpS = float.PositiveInfinity;
             KVBNextLineSpeedDistanceM = float.PositiveInfinity;
+
+            KVBState = KVBStateType.Normal;
         }
 
         protected void UpdateTVM()
@@ -1137,7 +1154,7 @@ namespace ORTS.Scripting.Script
             if ((TVM300Present || TVM430Present) && IsSpeedControlEnabled())
             {
                 // Automatic arming
-                if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
+                if (NextPostSpeedLimitMpS(0) > MpS.FromKpH(221f) && NextPostDistanceM(0) < 5f && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
                 {
                     TVMArmed = true;
                     UpdateTVMAspect(NextSignalAspect(0), false);

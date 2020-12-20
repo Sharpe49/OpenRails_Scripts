@@ -433,7 +433,7 @@ namespace ORTS.Scripting.Script
             if (TVM300Present && IsSpeedControlEnabled())
             {
                 // Automatic arming
-                if (CurrentPostSpeedLimitMpS() > MpS.FromKpH(221f) && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
+                if (NextPostSpeedLimitMpS(0) > MpS.FromKpH(221f) && NextPostDistanceM(0) < 5f && PreviousLineSpeed <= MpS.FromKpH(221f) && SpeedMpS() > 0f && !TVMArmed)
                 {
                     TVMArmed = true;
                     UpdateTVMAspect(NextSignalAspect(0), false);
