@@ -26,6 +26,17 @@ namespace ORTS.Scripting.Script
 {
     public class TCS_France : TrainControlSystem
     {
+        // Helper functions
+        public static T Min<T>(T a, T b) where T : IComparable
+        {
+            return a.CompareTo(b) <= 0 ? a : b;
+        }
+
+        public static T Max<T>(T a, T b) where T : IComparable
+        {
+            return a.CompareTo(b) >= 0 ? a : b;
+        }
+
         // Cabview control number
         const int BP_AC_SF = 0;
         const int BP_A_LS_SF = 2;
@@ -499,16 +510,28 @@ namespace ORTS.Scripting.Script
             {
                 // If train is about to cross a normal signal, get its information.
                 float nextNormalSignalDistance = NextSignalDistanceM(0);
+                Aspect nextNormalSignalAspect = Aspect.None;
                 if (nextNormalSignalDistance <= 5f)
                 {
-                    RSOLastSignalAspect = NextSignalAspect(0);
+                    nextNormalSignalAspect = NextSignalAspect(0);
                 }
 
-                // If train is about to cross a normal signal, get its information.
+                // If train is about to cross a distant signal, get its information.
                 float nextDistantSignalDistance = NextDistanceSignalDistanceM();
+                Aspect nextDistantSignalAspect = Aspect.None;
                 if (nextDistantSignalDistance <= 5f)
                 {
-                    RSOLastSignalAspect = NextDistanceSignalAspect();
+                    nextDistantSignalAspect = NextDistanceSignalAspect();
+                    // Hack for Swiss signals : only approach and clear aspects are allowed on distant signals
+                    if (nextDistantSignalAspect > Aspect.Approach_1)
+                    {
+                        nextDistantSignalAspect = Aspect.Approach_1;
+                    }
+                }
+
+                if (nextNormalSignalAspect != Aspect.None || nextDistantSignalAspect != Aspect.None)
+                {
+                    RSOLastSignalAspect = Max(nextNormalSignalAspect, nextDistantSignalAspect);
                 }
 
                 RSOClosedSignal = RSOOpenedSignal = false;
@@ -732,17 +755,29 @@ namespace ORTS.Scripting.Script
 
             // If train is about to cross a normal signal, get its information.
             float nextNormalSignalDistance = NextSignalDistanceM(0);
+            Aspect nextNormalSignalAspect = Aspect.None;
             if (nextNormalSignalDistance <= 5f)
             {
-                KVBLastSignalAspect = NextSignalAspect(0);
+                nextNormalSignalAspect = NextSignalAspect(0);
                 KVBLastSignalSpeedLimitMpS = NextSignalSpeedLimitMpS(0) > 0f ? NextSignalSpeedLimitMpS(0) : float.PositiveInfinity;
             }
 
-            // If train is about to cross a normal signal, get its information.
+            // If train is about to cross a distant signal, get its information.
             float nextDistantSignalDistance = NextDistanceSignalDistanceM();
+            Aspect nextDistantSignalAspect = Aspect.None;
             if (nextDistantSignalDistance <= 5f)
             {
-                KVBLastSignalAspect = NextDistanceSignalAspect();
+                nextDistantSignalAspect = NextDistanceSignalAspect();
+                // Hack for Swiss signals : only approach and clear aspects are allowed on distant signals
+                if (nextDistantSignalAspect > Aspect.Approach_1)
+                {
+                    nextDistantSignalAspect = Aspect.Approach_1;
+                }
+            }
+
+            if (nextNormalSignalAspect != Aspect.None || nextDistantSignalAspect != Aspect.None)
+            {
+                KVBLastSignalAspect = Max(nextNormalSignalAspect, nextDistantSignalAspect);
             }
 
             // If not on sight, current track node is longer than train length and no switch is in front of us, release the signal speed limit

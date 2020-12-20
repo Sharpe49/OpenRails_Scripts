@@ -25,6 +25,17 @@ namespace ORTS.Scripting.Script
 {
     public class Old_TCS_France : TrainControlSystem
     {
+        // Helper functions
+        public static T Min<T>(T a, T b) where T : IComparable
+        {
+            return a.CompareTo(b) <= 0 ? a : b;
+        }
+
+        public static T Max<T>(T a, T b) where T : IComparable
+        {
+            return a.CompareTo(b) >= 0 ? a : b;
+        }
+
         // Cabview control number
         // Not sure about the names of the buttons and lights for RS (old system)
         const int BP_AC_SF = 0;
@@ -292,16 +303,28 @@ namespace ORTS.Scripting.Script
             {
                 // If train is about to cross a normal signal, get its information.
                 float nextNormalSignalDistance = NextSignalDistanceM(0);
+                Aspect nextNormalSignalAspect = Aspect.None;
                 if (nextNormalSignalDistance <= 5f)
                 {
-                    RSLastSignalAspect = NextSignalAspect(0);
+                    nextNormalSignalAspect = NextSignalAspect(0);
                 }
 
-                // If train is about to cross a normal signal, get its information.
+                // If train is about to cross a distant signal, get its information.
                 float nextDistantSignalDistance = NextDistanceSignalDistanceM();
+                Aspect nextDistantSignalAspect = Aspect.None;
                 if (nextDistantSignalDistance <= 5f)
                 {
-                    RSLastSignalAspect = NextDistanceSignalAspect();
+                    nextDistantSignalAspect = NextDistanceSignalAspect();
+                    // Hack for Swiss signals : only approach and clear aspects are allowed on distant signals
+                    if (nextDistantSignalAspect > Aspect.Approach_1)
+                    {
+                        nextDistantSignalAspect = Aspect.Approach_1;
+                    }
+                }
+
+                if (nextNormalSignalAspect != Aspect.None || nextDistantSignalAspect != Aspect.None)
+                {
+                    RSLastSignalAspect = Max(nextNormalSignalAspect, nextDistantSignalAspect);
                 }
 
                 RSClosedSignal = RSOpenedSignal = false;
