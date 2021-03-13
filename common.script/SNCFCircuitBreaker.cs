@@ -50,7 +50,7 @@ namespace ORTS.Scripting.Script
                     break;
 
                 case CircuitBreakerState.Closing:
-                    if (ClosingAuthorization() && DriverClosingOrder())
+                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
                     {
                         if (!ClosingTimer.Started)
                         {
@@ -71,7 +71,7 @@ namespace ORTS.Scripting.Script
                     break;
 
                 case CircuitBreakerState.Open:
-                    if (ClosingAuthorization() && DriverClosingOrder())
+                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
                     {
                         SetCurrentState(CircuitBreakerState.Closing);
                     }
