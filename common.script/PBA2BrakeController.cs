@@ -30,14 +30,14 @@ namespace ORTS.Scripting.Script
             Overcharge,
             OverchargeElimination,
             Release,
-            Lap,
+            Hold,
             Apply,
             Emergency
         }
 
         public float OverchargeValue { get; private set; }
         public float ReleaseValue { get; private set; }
-        public float LapValue { get; private set; }
+        public float HoldValue { get; private set; }
         public float ApplyValue { get; private set; }
         public float EmergencyValue { get; private set; }
 
@@ -78,7 +78,8 @@ namespace ORTS.Scripting.Script
                         OverchargeValue = notch.Value;
                         break;
                     case ControllerState.Lap:
-                        LapValue = notch.Value;
+                    case ControllerState.Hold:
+                        HoldValue = notch.Value;
                         break;
                     case ControllerState.Apply:
                     case ControllerState.GSelfLap:
@@ -103,7 +104,7 @@ namespace ORTS.Scripting.Script
             else if (Release)
                 SetCurrentValue(ReleaseValue);
             else
-                SetCurrentValue(LapValue);
+                SetCurrentValue(HoldValue);
 
             return CurrentValue();
         }
@@ -144,7 +145,7 @@ namespace ORTS.Scripting.Script
                 )
                 CurrentState = State.Release;
             else
-                CurrentState = State.Lap;
+                CurrentState = State.Hold;
 
             switch (CurrentState)
             {
@@ -177,7 +178,7 @@ namespace ORTS.Scripting.Script
                         pressureBar = RegulatorPressureBar;
                     break;
 
-                case State.Lap:
+                case State.Hold:
                     SetUpdateValue(0);
                     break;
 
@@ -329,8 +330,8 @@ namespace ORTS.Scripting.Script
                 case State.Release:
                     return ControllerState.Release;
 
-                case State.Lap:
-                    return ControllerState.Lap;
+                case State.Hold:
+                    return ControllerState.Hold;
 
                 case State.Apply:
                     return ControllerState.Apply;
@@ -371,7 +372,7 @@ namespace ORTS.Scripting.Script
                 Release = false;
                 ReleaseTo5Bar = false;
             }
-            else if (CurrentValue() == LapValue)
+            else if (CurrentValue() == HoldValue)
             {
                 Apply = false;
                 Release = false;
