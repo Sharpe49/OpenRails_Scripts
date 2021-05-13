@@ -20,6 +20,7 @@ using ORTS;
 using Orts.Common;
 using ORTS.Scripting.Api;
 using Orts.Simulation;
+using System.Globalization;
 
 namespace ORTS.Scripting.Script
 {
@@ -110,7 +111,14 @@ namespace ORTS.Scripting.Script
                         Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
                         if (!ClosingAuthorization())
                         {
-                            Message(ConfirmLevel.Warning, "Circuit breaker closing not authorized / Fermeture du disjoncteur non autorisée");
+                            if (CultureInfo.CurrentCulture.TwoLetterISOLanguageName == "fr")
+                            {
+                                Message(ConfirmLevel.Warning, "Fermeture du disjoncteur non autorisée");
+                            }
+                            else
+                            {
+                                Message(ConfirmLevel.Warning, "Circuit breaker closing not authorized");
+                            }
                         }
                     }
                     break;
