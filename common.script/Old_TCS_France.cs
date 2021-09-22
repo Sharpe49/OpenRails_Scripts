@@ -55,22 +55,7 @@ namespace ORTS.Scripting.Script
         }
 
     // Properties
-        bool RearmingButton
-        {
-            get
-            {
-                if (Locomotive() is MSTSElectricLocomotive)
-                {
-                    MSTSElectricLocomotive electricLocomotive = Locomotive() as MSTSElectricLocomotive;
-
-                    return electricLocomotive.PowerSupply.CircuitBreaker.DriverClosingOrder;
-                }
-                else
-                {
-                    return true;
-                }
-            }
-        }
+        bool RearmingButton { get; set; } = false;
 
     // Train parameters
         bool VACMAPresent;                                  // VACMA
@@ -660,6 +645,22 @@ namespace ORTS.Scripting.Script
                             }
                         }
                     }
+                    break;
+            }
+        }
+
+        public override void HandleEvent(PowerSupplyEvent evt, string message)
+        {
+            switch (evt)
+            {
+                case PowerSupplyEvent.CloseCircuitBreakerButtonPressed:
+                case PowerSupplyEvent.CloseTractionCutOffRelayButtonPressed:
+                    RearmingButton = true;
+                    break;
+
+                case PowerSupplyEvent.CloseCircuitBreakerButtonReleased:
+                case PowerSupplyEvent.CloseTractionCutOffRelayButtonReleased:
+                    RearmingButton = false;
                     break;
             }
         }
