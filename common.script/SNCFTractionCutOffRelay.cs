@@ -1,4 +1,4 @@
-// COPYRIGHT 2014 by the Open Rails project.
+// COPYRIGHT 2020 by the Open Rails project.
 // 
 // This file is part of Open Rails.
 // 
@@ -23,32 +23,35 @@ using System.Globalization;
 namespace ORTS.Scripting.Script
 {
 
-    public class SNCFCircuitBreaker : CircuitBreaker
+    public class SNCFTractionCutOffRelay : TractionCutOffRelay
     {
         private Timer ClosingTimer;
-        private CircuitBreakerState PreviousState;
+        private TractionCutOffRelayState PreviousState;
 
         public override void Initialize()
         {
             ClosingTimer = new Timer(this);
             ClosingTimer.Setup(ClosingDelayS());
+
+            SetDriverOpeningOrder(false);
+            SetDriverClosingAuthorization(false);
         }
 
         public override void Update(float elapsedSeconds)
         {
-            SetClosingAuthorization(TCSClosingAuthorization() && DriverClosingAuthorization() && CurrentPantographState() == PantographState.Up);
+            SetClosingAuthorization(TCSClosingAuthorization() && CurrentDieselEngineState() == DieselEngineState.Running);
 
             switch (CurrentState())
             {
-                case CircuitBreakerState.Closed:
+                case TractionCutOffRelayState.Closed:
                     if (!ClosingAuthorization())
                     {
-                        SetCurrentState(CircuitBreakerState.Open);
+                        SetCurrentState(TractionCutOffRelayState.Open);
                     }
                     break;
 
-                case CircuitBreakerState.Closing:
-                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
+                case TractionCutOffRelayState.Closing:
+                    if (ClosingAuthorization() && DriverClosingOrder())
                     {
                         if (!ClosingTimer.Started)
                         {
@@ -58,20 +61,20 @@ namespace ORTS.Scripting.Script
                         if (ClosingTimer.Triggered)
                         {
                             ClosingTimer.Stop();
-                            SetCurrentState(CircuitBreakerState.Closed);
+                            SetCurrentState(TractionCutOffRelayState.Closed);
                         }
                     }
                     else
                     {
                         ClosingTimer.Stop();
-                        SetCurrentState(CircuitBreakerState.Open);
+                        SetCurrentState(TractionCutOffRelayState.Open);
                     }
                     break;
 
-                case CircuitBreakerState.Open:
-                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
+                case TractionCutOffRelayState.Open:
+                    if (ClosingAuthorization() && DriverClosingOrder())
                     {
-                        SetCurrentState(CircuitBreakerState.Closing);
+                        SetCurrentState(TractionCutOffRelayState.Closing);
                     }
                     break;
             }
@@ -80,16 +83,16 @@ namespace ORTS.Scripting.Script
             {
                 switch (CurrentState())
                 {
-                    case CircuitBreakerState.Open:
-                        SignalEvent(Event.CircuitBreakerOpen);
+                    case TractionCutOffRelayState.Open:
+                        SignalEvent(Event.TractionCutOffRelayOpen);
                         break;
 
-                    case CircuitBreakerState.Closing:
-                        SignalEvent(Event.CircuitBreakerClosing);
+                    case TractionCutOffRelayState.Closing:
+                        SignalEvent(Event.TractionCutOffRelayClosing);
                         break;
 
-                    case CircuitBreakerState.Closed:
-                        SignalEvent(Event.CircuitBreakerClosed);
+                    case TractionCutOffRelayState.Closed:
+                        SignalEvent(Event.TractionCutOffRelayClosed);
                         break;
                 }
             }
@@ -101,60 +104,40 @@ namespace ORTS.Scripting.Script
         {
             switch (evt)
             {
-                case PowerSupplyEvent.CloseCircuitBreakerButtonPressed:
+                case PowerSupplyEvent.CloseTractionCutOffRelayButtonPressed:
                     if (!DriverClosingOrder())
                     {
                         SetDriverClosingOrder(true);
-                        SignalEvent(Event.CircuitBreakerClosingOrderOn);
-                        Confirm(CabControl.CircuitBreakerClosingOrder, CabSetting.On);
+                        SignalEvent(Event.TractionCutOffRelayClosingOrderOn);
+                        Confirm(CabControl.TractionCutOffRelayClosingOrder, CabSetting.On);
                         if (!ClosingAuthorization())
                         {
                             if (CultureInfo.CurrentCulture.TwoLetterISOLanguageName == "fr")
                             {
-                                Message(ConfirmLevel.Warning, "Fermeture du disjoncteur non autorisée");
+                                Message(ConfirmLevel.Warning, "Fermeture du relai de traction non autorisée");
                             }
                             else
                             {
-                                Message(ConfirmLevel.Warning, "Circuit breaker closing not authorized");
+                                Message(ConfirmLevel.Warning, "Traction cut-off relay closing not authorized");
                             }
                         }
                     }
                     break;
 
-                case PowerSupplyEvent.CloseCircuitBreakerButtonReleased:
+                case PowerSupplyEvent.CloseTractionCutOffRelayButtonReleased:
                     if (DriverClosingOrder())
                     {
                         SetDriverClosingOrder(false);
-                        SignalEvent(Event.CircuitBreakerClosingOrderOff);
-                    }
-                    break;
-
-                case PowerSupplyEvent.GiveCircuitBreakerClosingAuthorization:
-                    if (!DriverClosingAuthorization())
-                    {
-                        SetDriverClosingAuthorization(true);
-                        SignalEvent(Event.CircuitBreakerClosingAuthorizationOn);
-                        Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.On);
-                    }
-                    break;
-
-                case PowerSupplyEvent.RemoveCircuitBreakerClosingAuthorization:
-                    if (DriverClosingAuthorization())
-                    {
-                        SetDriverClosingAuthorization(false);
-                        SignalEvent(Event.CircuitBreakerClosingAuthorizationOff);
-                        Confirm(CabControl.CircuitBreakerClosingAuthorization, CabSetting.Off);
+                        SignalEvent(Event.TractionCutOffRelayClosingOrderOff);
                     }
                     break;
 
                 case PowerSupplyEvent.QuickPowerOn:
-                    SetDriverClosingAuthorization(true);
-                    SetCurrentState(CircuitBreakerState.Closed);
+                    SetCurrentState(TractionCutOffRelayState.Closed);
                     break;
 
                 case PowerSupplyEvent.QuickPowerOff:
-                    SetDriverClosingAuthorization(false);
-                    SetCurrentState(CircuitBreakerState.Open);
+                    SetCurrentState(TractionCutOffRelayState.Open);
                     break;
             }
         }
