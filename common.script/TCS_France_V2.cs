@@ -27,7 +27,7 @@ using System.Linq;
 
 namespace ORTS.Scripting.Script
 {
-    public class TCS_France : TrainControlSystem
+    public class TCS_France_V2 : TrainControlSystem
     {
         // Helper functions
         public static T Min<T>(T a, T b) where T : IComparable
@@ -56,7 +56,6 @@ namespace ORTS.Scripting.Script
         const int BP_AM_V1 = 9;
         const int BP_AM_V2 = 10;
         const int BP_DM = 11;
-        const int TVM_Mask = 20;
         const int VY_CO_URG = 21;
         const int VY_CO_Z = 22;
         const int VY_CV = 23;
@@ -91,8 +90,19 @@ namespace ORTS.Scripting.Script
             DISTANCE,
             INFO,
             REPEATER,
-            SHUNTING,
             SPEED,
+            TABP,
+            TIVD,
+            TIVR,
+            BP_ANN,
+            BP_EXE,
+            BP_FP,
+            CCT_ANN,
+            CCT_EXE,
+            CCT_FP,
+            KVB,
+            TVM300_EPI,
+            TVM430_BSP,
             SPEEDPOST,
         }
 
@@ -524,14 +534,10 @@ namespace ORTS.Scripting.Script
         bool DECAB = true;
 
     // TVM arming check
-        OdoMeter KarmStartOdometer;
         bool KarmEmergencyBraking = false;
         QBalType QBal = QBalType.LC;    // Q-BAL
 
     // TVM COVIT common
-        // Constants
-        const int TVMNumberOfBlockSections = 10;
-
         // Parameters
         TVMModelType TVMModel = TVMModelType.None;
         TVMModeType TVMMode = TVMModeType.None;
@@ -547,18 +553,16 @@ namespace ORTS.Scripting.Script
 
         bool TVMOpenCircuitBreaker = false;
         bool TVMOpenCircuitBreakerAutomatic = false;
+        bool TVMOpenCircuitBreakerOrder = false;
+        bool TVMCloseCircuitBreakerOrder = false;
+        bool TVMTractionReductionOrder = false;
         bool TVMLowerPantograph = false;
-
-        int[] SpeedSequence = new int[TVMNumberOfBlockSections];
-        Aspect[] AspectSequence = new Aspect[TVMNumberOfBlockSections];
-        int PreviousSectionSpeed = 0;
-        Aspect PreviousSectionAspect = Aspect.None;
-        TVMSpeedType PreviousVcond = TVMSpeedType.Any;
-
-        TVMSpeedType[] VcondList = new TVMSpeedType[TVMNumberOfBlockSections];
-        TVMSpeedType[] VeList = new TVMSpeedType[TVMNumberOfBlockSections];
-        TVMSpeedType[] VcList = new TVMSpeedType[TVMNumberOfBlockSections];
-        TVMSpeedType[] VaList = new TVMSpeedType[TVMNumberOfBlockSections];
+        bool TVMLowerPantographOrder = false;
+        OdoMeter TVMOpenCircuitBreakerStartOdometer;
+        OdoMeter TVMOpenCircuitBreakerEndOdometer;
+        Timer TVMCloseCircuitBreakerOrderTimer;
+        OdoMeter TVMLowerPantographStartOdometer;
+        OdoMeter TVMLowerPantographEndOdometer;
 
         TVMSpeedType Ve = TVMSpeedType._000;
         TVMSpeedType Vc = TVMSpeedType._RRR;
@@ -600,37 +604,6 @@ namespace ORTS.Scripting.Script
             { TVMAspectType._80E, Aspect.StopAndProceed },
             { TVMAspectType._000, Aspect.Stop },
             { TVMAspectType._RRR, Aspect.Permission }
-        };
-
-        Dictionary<TVMSpeedType, TVMSpeedType> TVM300Tab1 = new Dictionary<TVMSpeedType, TVMSpeedType>
-        {
-            { TVMSpeedType._RRR,   TVMSpeedType._000 },
-            { TVMSpeedType._000,  TVMSpeedType._160 },
-            { TVMSpeedType._80E,  TVMSpeedType._80 },
-            { TVMSpeedType._80,   TVMSpeedType._160 },
-            { TVMSpeedType._160E, TVMSpeedType._160 },
-            { TVMSpeedType._160,  TVMSpeedType._220 },
-            { TVMSpeedType._220E, TVMSpeedType._220 },
-            { TVMSpeedType._220,  TVMSpeedType._270 },
-            { TVMSpeedType._270V, TVMSpeedType._270 },
-            { TVMSpeedType._270,  TVMSpeedType._300 },
-            { TVMSpeedType._300V, TVMSpeedType._300 },
-            { TVMSpeedType._300,  TVMSpeedType._000 }
-        };
-        Dictionary<TVMSpeedType, TVMSpeedType> TVM300Tab2 = new Dictionary<TVMSpeedType, TVMSpeedType>
-        {
-            { TVMSpeedType._RRR,   TVMSpeedType._000 },
-            { TVMSpeedType._000,  TVMSpeedType._000 },
-            { TVMSpeedType._80E,  TVMSpeedType._80 },
-            { TVMSpeedType._80,   TVMSpeedType._80 },
-            { TVMSpeedType._160E, TVMSpeedType._160 },
-            { TVMSpeedType._160,  TVMSpeedType._160 },
-            { TVMSpeedType._220E, TVMSpeedType._220 },
-            { TVMSpeedType._220,  TVMSpeedType._220 },
-            { TVMSpeedType._270V, TVMSpeedType._270 },
-            { TVMSpeedType._270,  TVMSpeedType._270 },
-            { TVMSpeedType._300V, TVMSpeedType._300 },
-            { TVMSpeedType._300,  TVMSpeedType._000 }
         };
 
     // TVM430 COVIT (Transmission Voie Machine 430 COntrôle de VITesse / Track Machine Transmission 430 Speed control)
@@ -695,65 +668,6 @@ namespace ORTS.Scripting.Script
             { TVMAspectType._RRR, Aspect.Permission }
         };
 
-        Dictionary<TVMSpeedType, TVMSpeedType> TVM430SncfTab1 = new Dictionary<TVMSpeedType, TVMSpeedType>
-        {
-            { TVMSpeedType._RRR,   TVMSpeedType._000 },
-            { TVMSpeedType._000,  TVMSpeedType._170 },
-            { TVMSpeedType._60E,  TVMSpeedType._60 },
-            { TVMSpeedType._60,   TVMSpeedType._170 },
-            { TVMSpeedType._80E,  TVMSpeedType._80 },
-            { TVMSpeedType._80,   TVMSpeedType._170 },
-            { TVMSpeedType._130E, TVMSpeedType._130 },
-            { TVMSpeedType._130,  TVMSpeedType._200 },
-            { TVMSpeedType._160E, TVMSpeedType._160 },
-            { TVMSpeedType._160,  TVMSpeedType._230 },
-            { TVMSpeedType._170E, TVMSpeedType._170 },
-            { TVMSpeedType._170,  TVMSpeedType._230 },
-            { TVMSpeedType._200V, TVMSpeedType._200 },
-            { TVMSpeedType._200,  TVMSpeedType._230 },
-            { TVMSpeedType._220E, TVMSpeedType._220 },
-            { TVMSpeedType._220V, TVMSpeedType._220 },
-            { TVMSpeedType._220,  TVMSpeedType._270 },
-            { TVMSpeedType._230E, TVMSpeedType._230 },
-            { TVMSpeedType._230V, TVMSpeedType._230 },
-            { TVMSpeedType._230,  TVMSpeedType._270 },
-            { TVMSpeedType._270V, TVMSpeedType._270 },
-            { TVMSpeedType._270,  TVMSpeedType._300 },
-            { TVMSpeedType._300V, TVMSpeedType._300 },
-            { TVMSpeedType._300,  TVMSpeedType._320 },
-            { TVMSpeedType._320V, TVMSpeedType._320 },
-            { TVMSpeedType._320,  TVMSpeedType._000 }
-        };
-        Dictionary<TVMSpeedType, TVMSpeedType> TVM430SncfTab2 = new Dictionary<TVMSpeedType, TVMSpeedType>
-        {
-            { TVMSpeedType._RRR,   TVMSpeedType._000 },
-            { TVMSpeedType._000,  TVMSpeedType._000 },
-            { TVMSpeedType._60E,  TVMSpeedType._60 },
-            { TVMSpeedType._60,   TVMSpeedType._60 },
-            { TVMSpeedType._80E,  TVMSpeedType._80 },
-            { TVMSpeedType._80,   TVMSpeedType._80 },
-            { TVMSpeedType._130E, TVMSpeedType._130 },
-            { TVMSpeedType._130,  TVMSpeedType._130 },
-            { TVMSpeedType._160E, TVMSpeedType._160 },
-            { TVMSpeedType._160,  TVMSpeedType._160 },
-            { TVMSpeedType._170E, TVMSpeedType._170 },
-            { TVMSpeedType._170,  TVMSpeedType._170 },
-            { TVMSpeedType._200V, TVMSpeedType._200 },
-            { TVMSpeedType._200,  TVMSpeedType._200 },
-            { TVMSpeedType._220E, TVMSpeedType._220 },
-            { TVMSpeedType._220V, TVMSpeedType._220 },
-            { TVMSpeedType._220,  TVMSpeedType._220 },
-            { TVMSpeedType._230E, TVMSpeedType._230 },
-            { TVMSpeedType._230V, TVMSpeedType._230 },
-            { TVMSpeedType._230,  TVMSpeedType._230 },
-            { TVMSpeedType._270V, TVMSpeedType._270 },
-            { TVMSpeedType._270,  TVMSpeedType._270 },
-            { TVMSpeedType._300V, TVMSpeedType._300 },
-            { TVMSpeedType._300,  TVMSpeedType._300 },
-            { TVMSpeedType._320V, TVMSpeedType._320 },
-            { TVMSpeedType._320,  TVMSpeedType._000 }
-        };
-
         // Parameters
         float TVM430TrainSpeedLimitMpS;
 
@@ -788,7 +702,7 @@ namespace ORTS.Scripting.Script
         Dictionary<SignalType, SignalData> Signals = new Dictionary<SignalType, SignalData>();
         SpeedPostData SpeedPost = new SpeedPostData();
 
-        public TCS_France()
+        public TCS_France_V2()
         {
             foreach (SignalType signalType in (SignalType[]) Enum.GetValues(typeof(SignalType)))
             {
@@ -846,7 +760,6 @@ namespace ORTS.Scripting.Script
             KVBPreAnnounceOdometerVLCLI = new OdoMeter(this);
             KVBTrainLengthOdometerVLCLI = new OdoMeter(this);
             KVBTrainLengthOdometerFVL = new OdoMeter(this);
-            KarmStartOdometer = new OdoMeter(this);
 
             KVBGroundFailureTimer.Setup(10f);
             KVBGroundFailureBlinker.Setup(2f);
@@ -861,14 +774,19 @@ namespace ORTS.Scripting.Script
             KVBCTABPOdometer.Setup(2000f);
             KVBOverrideNfOdometer.Setup(100f);
             KVBShuntingOdometer.Setup(3500f);
-            KarmStartOdometer.Setup(450f);
 
             // TVM common section
             TVMCOVITInhibited = GetBoolParameter("TVM", "CovitInhibited", false);
 
             TVMBlinker = new Blinker(this);
+            TVMOpenCircuitBreakerStartOdometer = new OdoMeter(this);
+            TVMOpenCircuitBreakerEndOdometer = new OdoMeter(this);
+            TVMCloseCircuitBreakerOrderTimer = new Timer(this);
+            TVMLowerPantographStartOdometer = new OdoMeter(this);
+            TVMLowerPantographEndOdometer = new OdoMeter(this);
 
             TVMBlinker.Setup(1f);
+            TVMCloseCircuitBreakerOrderTimer.Setup(3f);
 
             // TVM300 section
             TVM300DecodingFileName = GetStringParameter("TVM300", "DecodingFileName", "..\\..\\common.script\\TGVR_TVM300.csv");
@@ -995,7 +913,6 @@ namespace ORTS.Scripting.Script
             SetCustomizedCabviewControlName(BP_AM_V1, "BP AM V1 : Armement manuel TVM voie 1 / TVM manual arming track 1");
             SetCustomizedCabviewControlName(BP_AM_V2, "BP AM V2 : Armement manuel TVM voie 2 / TVM manual arming track 2");
             SetCustomizedCabviewControlName(BP_DM, "BP DM : Désarmement manuel TVM / TVM manual dearming");
-            SetCustomizedCabviewControlName(TVM_Mask, "Masque TVM / TVM mask");
             SetCustomizedCabviewControlName(VY_CO_URG, "VY CO URG : Contrôle freinage d'urgence / Emergency braking check");
             SetCustomizedCabviewControlName(VY_CO_Z, "VY CO Z : Contrôle interrupteurs d'isolement / Isolation switch check");
             SetCustomizedCabviewControlName(VY_CV, "VY CV : COVIT (freinage d'urgence TVM) / TVM emergency braking");
@@ -1043,337 +960,6 @@ namespace ORTS.Scripting.Script
             }
         }
 
-        protected SignalFeatures MstsSignalToNewSignal(SignalFeatures signal, SignalType signalType)
-        {
-            string textAspect = string.Empty;
-
-            switch (signalType)
-            {
-                case SignalType.NORMAL:
-                case SignalType.DISTANCE:
-                    if (!signal.MainHeadSignalTypeName.ToLower().Contains("tvm")
-                        || signal.MainHeadSignalTypeName.ToLower().Contains("cab")
-                        || signal.MainHeadSignalTypeName.ToLower().Contains("tvm270ds")) // LGVA DS
-                    {
-                        switch (signal.DrawStateName.ToUpper())
-                        {
-                            case "C":
-                            case "CARRE":
-                            case "CV":
-                                if (signal.SignalTypeName.Contains("bm"))
-                                {
-                                    textAspect = "FR_C_BM CROCODILE_SF KVB_S_S_BM";
-                                }
-                                else if (signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_C_BAPR CROCODILE_SF KVB_S_C_BAL";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_C_BAL CROCODILE_SF KVB_S_C_BAL";
-                                }
-                                break;
-
-                            case "S":
-                            case "SEMAFORE":
-                                if (signal.SignalTypeName.Contains("bm"))
-                                {
-                                    textAspect = "FR_S_BM CROCODILE_SF KVB_S_S_BM";
-                                }
-                                else if (signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_S_BAPR CROCODILE_SF KVB_S_S_BAL";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_S_BAL CROCODILE_SF KVB_S_S_BAL";
-                                }
-                                break;
-
-                            case "SCLI":
-                            case "SS":
-                                textAspect = "FR_SCLI CROCODILE_SF KVB_S_S_BAL";
-                                break;
-
-                            case "D":
-                                textAspect = "FR_D CROCODILE_SF KVB_S_S_BAL";
-                                break;
-
-                            case "MCLI":
-                                textAspect = "FR_MCLI CROCODILE_SF";
-                                break;
-
-                            case "M":
-                                textAspect = "FR_M CROCODILE_SF";
-                                break;
-
-                            case "RR_A":
-                            case "RR+A":
-                            case "RR30+A":
-                            case "A+RR":
-                                textAspect = "FR_RR_A CROCODILE_SF KVB_S_A";
-                                break;
-
-                            case "RR_ACLI":
-                            case "RR+ACLI":
-                            case "RR30+AA":
-                                textAspect = "FR_RR_ACLI CROCODILE_SF KVB_S_ACLI";
-                                break;
-
-                            case "RR":
-                            case "RR30":
-                                textAspect = "FR_RR CROCODILE_SO KVB_S_VL_INF";
-                                break;
-
-                            case "RRCLI_A":
-                            case "RRCLI+A":
-                            case "RR60+A":
-                                textAspect = "FR_RRCLI_A CROCODILE_SF KVB_S_A";
-                                break;
-
-                            case "RRCLI_ACLI":
-                            case "RRCLI+ACLI":
-                            case "RR60+AA":
-                                textAspect = "FR_RRCLI_ACLI CROCODILE_SF KVB_S_ACLI";
-                                break;
-
-                            case "RRCLI":
-                            case "RR60":
-                                textAspect = "FR_RRCLI CROCODILE_SO KVB_S_VL_INF";
-                                break;
-
-                            case "A":
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_A CROCODILE_SF KVB_S_REOCS";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_A CROCODILE_SF KVB_S_A";
-                                }
-                                break;
-
-                            case "R":
-                            case "R30":
-                            case "R30+AA": // This aspect shouldn't exist but is present in LGVA-V2
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_R CROCODILE_SF KVB_S_REOVL";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_R CROCODILE_SF KVB_S_VL_INF";
-                                }
-                                break;
-
-                            case "RCLI_ACLI":
-                            case "RCLI+ACLI":
-                            case "R60+AA":
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_RCLI_ACLI CROCODILE_SF KVB_S_REOCS";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_RCLI_ACLI CROCODILE_SF KVB_S_ACLI";
-                                }
-                                break;
-
-                            case "ACLI":
-                            case "AA":
-                            case "AC":
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_ACLI CROCODILE_SF KVB_S_REOCS";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_ACLI CROCODILE_SF KVB_S_ACLI";
-                                }
-                                break;
-
-                            case "RCLI":
-                            case "R60":
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    textAspect = "FR_RCLI CROCODILE_SF KVB_S_REOVL";
-                                }
-                                else
-                                {
-                                    textAspect = "FR_RCLI CROCODILE_SF KVB_S_VL_INF";
-                                }
-                                break;
-
-                            case "VLCLI":
-                            case "VLVL":
-                            case "VLP":
-                            case "P":
-                            case "PREANNONCE":
-                                textAspect = "FR_VLCLI_ANN CROCODILE_SO KVB_S_VLCLI";
-                                break;
-
-                            case "VL":
-                                if (signal.SignalTypeName.Contains("bm")
-                                    || signal.SignalTypeName.Contains("bapr"))
-                                {
-                                    if (signal.SignalTypeName.Contains("svl"))
-                                    {
-                                        textAspect = "FR_VL_INF CROCODILE_SO KVB_S_VL_INF";
-                                    }
-                                    else
-                                    {
-                                        textAspect = "FR_VL_INF CROCODILE_SO KVB_S_REOVL";
-                                    }
-                                }
-                                else
-                                {
-                                    if (signal.SignalTypeName.Contains("vlvl")
-                                        || signal.SignalTypeName.Contains("220")) // LGVA
-                                    {
-                                        textAspect = "FR_VL_SUP CROCODILE_SO KVB_S_VL_SUP";
-                                    }
-                                    else
-                                    {
-                                        textAspect = "FR_VL_INF CROCODILE_SO KVB_S_VL_INF";
-                                    }
-                                }
-                                break;
-                        }
-
-                        if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm300")
-                            && signal.MainHeadSignalTypeName.ToLower().Contains("fincab")
-                            || signal.MainHeadSignalTypeName.ToLower().Contains("sortlgv160")) // LGVA
-                        {
-                            textAspect += " EPI_ECR";
-                        }
-                        else if (signal.MainHeadSignalTypeName.ToLower().Contains("sortlgv220") // LGVA
-                            || signal.MainHeadSignalTypeName.ToLower().Contains("sds"))         // LGVA DS
-                        {
-                            textAspect += " EPI_EB";
-                        }
-                        else if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm300")
-                            && signal.MainHeadSignalTypeName.ToLower().Contains("cab")
-                            || signal.MainHeadSignalTypeName.ToLower().Contains("entlgv")) // LGVA
-                        {
-                            textAspect += " EPI_ECS";
-                        }
-                        else if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm270ds")) // LGVA DS
-                        {
-                            textAspect += " EPI_ECS"; // TODO EDS
-                        }
-
-                        if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm430")
-                            && signal.MainHeadSignalTypeName.ToLower().Contains("fincab"))
-                        {
-                            textAspect += " BSP_ESL";
-                        }
-                        else if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm430")
-                            && signal.MainHeadSignalTypeName.ToLower().Contains("cab"))
-                        {
-                            textAspect += " BSP_ECS";
-                        }
-
-                        return new SignalFeatures(
-                            mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                            signalTypeName: signal.SignalTypeName,
-                            aspect: signal.Aspect,
-                            drawStateName: signal.DrawStateName,
-                            distanceM: signal.DistanceM,
-                            speedLimitMpS: signal.SpeedLimitMpS,
-                            altitudeM: signal.AltitudeM,
-                            textAspect: textAspect
-                            );
-                    }
-                    else if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm430")
-                        || signal.SignalTypeName.ToLower().Contains("LightTGV"))
-                    {
-                        textAspect = "FR_TVM430";
-
-                        if (signal.SpeedLimitMpS == 0)
-                        {
-                            textAspect += " BSP_CNf";
-                        }
-
-                        return new SignalFeatures(
-                            mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                            signalTypeName: signal.SignalTypeName,
-                            aspect: signal.Aspect,
-                            drawStateName: signal.DrawStateName,
-                            distanceM: signal.DistanceM,
-                            speedLimitMpS: signal.SpeedLimitMpS,
-                            altitudeM: signal.AltitudeM,
-                            textAspect: textAspect
-                            );
-                    }
-                    else if (signal.MainHeadSignalTypeName.ToLower().Contains("tvm300")
-                        || signal.MainHeadSignalTypeName.ToLower().Contains("tvm"))
-                    {
-                        textAspect = "FR_TVM300";
-
-                        if (signal.SpeedLimitMpS == 0)
-                        {
-                            textAspect += " EPI_Nf";
-                        }
-
-                        return new SignalFeatures(
-                            mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                            signalTypeName: signal.SignalTypeName,
-                            aspect: signal.Aspect,
-                            drawStateName: signal.DrawStateName,
-                            distanceM: signal.DistanceM,
-                            speedLimitMpS: signal.SpeedLimitMpS,
-                            altitudeM: signal.AltitudeM,
-                            textAspect: textAspect
-                            );
-                    }
-                    else
-                    {
-                        return signal;
-                    }
-
-                case SignalType.INFO:
-                    if (signal.SignalTypeName == "KVB_DGV")
-                    {
-                        textAspect = "KVB_DGV";
-                    }
-                    else if (signal.SignalTypeName == "KVB_FGV")
-                    {
-                        textAspect = "KVB_FGV";
-                    }
-                    else if (signal.SignalTypeName == "KVB_DVL")
-                    {
-                        textAspect = "KVB_DVL";
-                    }
-                    else if (signal.SignalTypeName == "KVB_FVL")
-                    {
-                        textAspect = "KVB_FVL";
-                    }
-                    else if (signal.SignalTypeName == "KVB_FZ")
-                    {
-                        textAspect = "KVB_FZ";
-                    }
-
-                    return new SignalFeatures(
-                        mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                        signalTypeName: signal.SignalTypeName,
-                        aspect: signal.Aspect,
-                        drawStateName: signal.DrawStateName,
-                        distanceM: signal.DistanceM,
-                        speedLimitMpS: signal.SpeedLimitMpS,
-                        altitudeM: signal.AltitudeM,
-                        textAspect: textAspect
-                        );
-
-                default:
-                    return signal;
-            }
-        }
-
         protected void OnSignalPassed(SignalFeatures signal, SignalType signalType)
         {
             OnSignalPassedRso(signal, signalType);
@@ -1416,8 +1002,13 @@ namespace ORTS.Scripting.Script
 
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
-                SetPowerAuthorization(!EmergencyBraking);
-                SetTractionAuthorization(!BrakeTractionCutOff);
+                SetPowerAuthorization(!EmergencyBraking && !TVMOpenCircuitBreakerOrder);
+                SetTractionAuthorization(!TVMTractionReductionOrder && !BrakeTractionCutOff);
+                SetCircuitBreakerClosingOrder(TVMCloseCircuitBreakerOrder);
+                if (TVMLowerPantographOrder)
+                {
+                    SetPantographsDown();
+                }
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);
@@ -1546,7 +1137,7 @@ namespace ORTS.Scripting.Script
                 {
                     case SignalType.NORMAL:
                     case SignalType.DISTANCE:
-                    case SignalType.REPEATER:
+                    case SignalType.TIVD:
                         if (signalAspect.Exists(x => x == "CROCODILE_SF"))
                         {
                             RSOClosedSignal = true;
@@ -2023,8 +1614,9 @@ namespace ORTS.Scripting.Script
                 {
                     case SignalType.NORMAL:
                     case SignalType.DISTANCE:
-                    case SignalType.REPEATER:
-                    case SignalType.SHUNTING:
+                    case SignalType.TIVD:
+                    case SignalType.TIVR:
+                    case SignalType.TABP:
                         foreach (string part in lastSignalAspect)
                         {
                             KVBSpeedPostSpeedCategory category = KVBSpeedPostSpeedCategory.G;
@@ -2068,7 +1660,7 @@ namespace ORTS.Scripting.Script
                             {
                                 speed = (KVBSpeedPostSpeedType)Enum.Parse(typeof(KVBSpeedPostSpeedType), part.Split('_')[2]);
 
-                                SignalFeatures dvlBalise = FindNextSignalWithTextAspect("KVB_DVL", SignalType.INFO, 5, 3000f);
+                                SignalFeatures dvlBalise = FindNextSignalWithTextAspect("KVB_DVL", SignalType.KVB, 5, 3000f);
 
                                 // If DVL found
                                 if (dvlBalise.TextAspect.Contains("KVB_DVL"))
@@ -2104,7 +1696,7 @@ namespace ORTS.Scripting.Script
                                 }
                                 else
                                 {
-                                    SignalFeatures dvlBalise = FindNextSignalWithTextAspect("KVB_DVL", SignalType.INFO, 5, 1000f);
+                                    SignalFeatures dvlBalise = FindNextSignalWithTextAspect("KVB_DVL", SignalType.KVB, 5, 1000f);
 
                                     // If DVL found
                                     if (dvlBalise.TextAspect.Contains("KVB_DVL"))
@@ -2207,7 +1799,7 @@ namespace ORTS.Scripting.Script
                         }
                         break;
 
-                    case SignalType.INFO:
+                    case SignalType.KVB:
                         if (lastSignalAspect.Contains("KVB_DGV"))
                         {
                             QBal = QBalType.LGV;
@@ -2377,7 +1969,7 @@ namespace ORTS.Scripting.Script
                 }
                 else
                 {
-                    if (!Signals[SignalType.INFO].NextSignal.TextAspect?.Contains("KVB_FVL") ?? false)
+                    if (!Signals[SignalType.KVB].NextSignal.TextAspect?.Contains("KVB_FVL") ?? false)
                     {
                         float nextDivergingSwitchDistanceM = NextDivergingSwitchDistanceM(500f);
                         float nextTrailingDivergingSwitchDistanceM = NextTrailingDivergingSwitchDistanceM(500f);
@@ -3404,7 +2996,7 @@ namespace ORTS.Scripting.Script
 
             for (int i = 0; i < maxSignals; i++)
             {
-                SignalFeatures foundSignal = MstsSignalToNewSignal(NextGenericSignalFeatures(signalType.ToString(), i, maxDistanceM), signalType);
+                SignalFeatures foundSignal = NextGenericSignalFeatures(signalType.ToString(), i, maxDistanceM);
 
                 if (foundSignal.TextAspect.Contains(text))
                 {
@@ -3427,7 +3019,7 @@ namespace ORTS.Scripting.Script
 
             for (int i = 0; i < maxSignals; i++)
             {
-                SignalFeatures foundSignal = MstsSignalToNewSignal(NextGenericSignalFeatures(signalType.ToString(), i, maxDistanceM), signalType);
+                SignalFeatures foundSignal = NextGenericSignalFeatures(signalType.ToString(), i, maxDistanceM);
 
                 if (Math.Round(MpS.ToKpH(foundSignal.SpeedLimitMpS)) == speedKpH)
                 {
@@ -3494,37 +3086,6 @@ namespace ORTS.Scripting.Script
             {
                 if (IsCabPowerSupplyOn() && !KVBInhibited)
                 {
-                    switch (QBal)
-                    {
-                        case QBalType.LC:
-                            if (KarmStartOdometer.Triggered)
-                            {
-                                KarmStartOdometer.Stop();
-                                QBal = QBalType.LGV;
-                            }
-                            break;
-
-                        case QBalType.LGV:
-                            string signalTypeName = Signals[SignalType.NORMAL].NextSignal.SignalTypeName.ToLower();
-
-                            if (signalTypeName.Contains("fincab"))
-                            {
-                                if (Signals[SignalType.NORMAL].NextSignal.DistanceM <= 60f)
-                                {
-                                    QBal = QBalType.LC;
-                                }
-                            }
-                            else if (signalTypeName.Contains("sortlgv")
-                                || signalTypeName.Contains("sds"))
-                            {
-                                if (Signals[SignalType.NORMAL].NextSignal.DistanceM <= 330f)
-                                {
-                                    QBal = QBalType.LC;
-                                }
-                            }
-                            break;
-                    }
-
                     if (QBal == QBalType.LGV)
                     {
                         if (!TVMArmed)
@@ -3554,92 +3115,10 @@ namespace ORTS.Scripting.Script
             }
         }
 
-        protected SignalFeatures MstsSignalToTvmSignal(SignalFeatures signal)
-        {
-            string signalTypeName = signal.SignalTypeName.ToLower();
-
-            if (signalTypeName.Contains("tvm430")
-                || signalTypeName.Contains("LightTGV")) // LGVMed
-            {
-                return MstsSignalToTvm430Signal(signal);
-            }
-            else if (signalTypeName.Contains("tvm300")
-                || signalTypeName.Contains("tvm")       // LGVA
-                || signalTypeName.Contains("sortlgv")   // LGVA
-                || signalTypeName.Contains("sds"))      // LGVA DS
-            {
-                return MstsSignalToTvm300Signal(signal);
-            }
-            else
-            {
-                return signal;
-            }
-        }
-
-        protected SignalFeatures MstsSignalToTvm300Signal(SignalFeatures signal)
-        {
-            string textAspect = "FR_TVM300";
-
-            textAspect += $" Ve{VeList[0].ToString().Substring(1)} Vc{VcList[0].ToString().Substring(1)}";
-
-            if (VaList[0] < VcList[0])
-            {
-                textAspect += $" Va{VaList[0].ToString().Substring(1)}";
-            }
-
-            return new SignalFeatures(
-                mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                signalTypeName: signal.SignalTypeName,
-                aspect: signal.Aspect,
-                drawStateName: signal.DrawStateName,
-                distanceM: signal.DistanceM,
-                speedLimitMpS: signal.SpeedLimitMpS,
-                altitudeM: signal.AltitudeM,
-                textAspect: textAspect
-                );
-        }
-
-        protected SignalFeatures MstsSignalToTvm430Signal(SignalFeatures signal)
-        {
-            string textAspect = "FR_TVM430";
-
-            textAspect += $" Ve{VeList[0].ToString().Substring(1)} Vc{VcList[0].ToString().Substring(1)}";
-
-            if (VaList[0] < VcList[0])
-            {
-                textAspect += $" Va{VaList[0].ToString().Substring(1)}";
-            }
-
-            return new SignalFeatures(
-                mainHeadSignalTypeName: signal.MainHeadSignalTypeName,
-                signalTypeName: signal.SignalTypeName,
-                aspect: signal.Aspect,
-                drawStateName: signal.DrawStateName,
-                distanceM: signal.DistanceM,
-                speedLimitMpS: signal.SpeedLimitMpS,
-                altitudeM: signal.AltitudeM,
-                textAspect: textAspect
-                );
-        }
-
         protected void UpdateTvm()
         {
             if ((TVM300Present || TVM430Present) && IsSpeedControlEnabled())
             {
-                if (TVMArmed) // LGVA dearming
-                {
-                    string signalTypeName = Signals[SignalType.NORMAL].NextSignal.SignalTypeName.ToLower();
-
-                    if (signalTypeName.Contains("sortlgv")
-                        || signalTypeName.Contains("sds"))
-                    {
-                        if (Signals[SignalType.NORMAL].NextSignal.DistanceM <= 270f)
-                        {
-                            ARMCAB = false;
-                        }
-                    }
-                }
-
                 if (!ARMCAB && TVMArmed && DECAB)
                 {
                     TVMArmed = false;
@@ -3672,10 +3151,10 @@ namespace ORTS.Scripting.Script
 
                 if (TVMArmed)
                 {
-                    CalculateTvmSequence();
                     DetermineTvmAspect();
                     UpdateTvmCovit();
                     UpdateTvmEmergencyBraking();
+                    UpdateTvmPunctualInformation();
                     UpdateTvmDisplay();
                     UpdateTvmSounds();
 
@@ -3698,6 +3177,7 @@ namespace ORTS.Scripting.Script
                     TVMDecelerationMpS2 = 0f;
 
                     UpdateTvmEmergencyBraking();
+                    UpdateTvmPunctualInformation();
                     UpdateTvmDisplay();
                 }
             }
@@ -3717,19 +3197,6 @@ namespace ORTS.Scripting.Script
                             TVMArmed = true;
                             TVMMode = TVMModeType.TVM300;
                             ARMCAB = true;
-
-                            PreviousSectionSpeed = Convert.ToInt32(MpS.ToKpH(signal.SpeedLimitMpS));
-                            PreviousSectionAspect = signal.Aspect;
-                            if (PreviousSectionSpeed == 160)
-                            {
-                                PreviousVcond = TVMSpeedType._160E;
-                            }
-                            else if (PreviousSectionSpeed == 220)
-                            {
-                                PreviousVcond = TVMSpeedType._220E;
-                            }
-
-                            KarmStartOdometer.Start();
                         }
                         else if (lastSignalAspect.Contains("EPI_ECR")
                             || lastSignalAspect.Contains("EPI_EB"))
@@ -3739,6 +3206,32 @@ namespace ORTS.Scripting.Script
                         else if (lastSignalAspect.Contains("EPI_Nf"))
                         {
                             TVMCOVITSpadEmergency = true;
+                        }
+                        break;
+
+                    case SignalType.BP_ANN:
+                    case SignalType.CCT_ANN:
+                        if (lastSignalAspect.Contains("EPI_BPT"))
+                        {
+                            float startDistanceM = 1506f;
+                            float endDistanceM = startDistanceM + 106f + TrainLengthM() + 25f;
+
+                            TVMLowerPantographStartOdometer.Setup(startDistanceM);
+                            TVMLowerPantographStartOdometer.Start();
+                            TVMLowerPantographEndOdometer.Setup(endDistanceM);
+                            TVMLowerPantographEndOdometer.Start();
+                            TVMLowerPantograph = true;
+                        }
+                        else if (lastSignalAspect.Contains("EPI_CCT"))
+                        {
+                            float startDistanceM = 1039f;
+                            float endDistanceM = startDistanceM + 151f + TrainLengthM() + 25f;
+
+                            TVMOpenCircuitBreakerStartOdometer.Setup(startDistanceM);
+                            TVMOpenCircuitBreakerStartOdometer.Start();
+                            TVMOpenCircuitBreakerEndOdometer.Setup(endDistanceM);
+                            TVMOpenCircuitBreakerEndOdometer.Start();
+                            TVMOpenCircuitBreaker = true;
                         }
                         break;
                 }
@@ -3756,19 +3249,6 @@ namespace ORTS.Scripting.Script
                             TVMArmed = true;
                             TVMMode = TVMModeType.TVM430;
                             ARMCAB = true;
-
-                            PreviousSectionSpeed = Convert.ToInt32(MpS.ToKpH(signal.SpeedLimitMpS));
-                            PreviousSectionAspect = signal.Aspect;
-                            if (PreviousSectionSpeed == 170)
-                            {
-                                PreviousVcond = TVMSpeedType._170E;
-                            }
-                            else if (PreviousSectionSpeed == 230)
-                            {
-                                PreviousVcond = TVMSpeedType._230E;
-                            }
-
-                            KarmStartOdometer.Start();
                         }
                         else if (lastSignalAspect.Contains("BSP_C430"))
                         {
@@ -3791,340 +3271,67 @@ namespace ORTS.Scripting.Script
                             TVMCOVITSpadEmergency = true;
                         }
                         break;
-                }
-            }
-        }
 
-        protected void CalculateTvmSequence()
-        {
-            switch (TVMMode)
-            {
-                case TVMModeType.TVM300:
-                    CalculateTvm300Sequence();
-                    break;
-
-                case TVMModeType.TVM430:
-                    CalculateTvm430Sequence();
-                    break;
-            }
-        }
-
-        protected void CalculateTvm300Sequence()
-        {
-            int i;
-
-            if (Signals[SignalType.NORMAL].SignalPassed)
-            {
-                PreviousSectionSpeed = SpeedSequence[0];
-                PreviousSectionAspect = AspectSequence[0];
-                PreviousVcond = VcondList[0];
-            }
-
-            int ignoreCount = 0;
-
-            // Get the 10 next signals (from 10th to 1st in order to be optimal)
-            for (i = TVMNumberOfBlockSections - 1; i >= 0; i--)
-            {
-                SpeedSequence[i] = Convert.ToInt32(MpS.ToKpH(NextSignalSpeedLimitMpS(i)));
-                AspectSequence[i] = NextSignalAspect(i);
-
-                if (SpeedSequence[i] <= 0f && AspectSequence[i] > Aspect.Stop)
-                {
-                    // Ignore
-                    ignoreCount++;
-                    i++;
-                }
-            }
-
-            // Calculate execution speeds (Vcond)
-            for (i = TVMNumberOfBlockSections - 1; i >= 0; i--)
-            {
-                Aspect currentAspect;
-                int currentSpeed;
-
-                if (i == 0)
-                {
-                    currentAspect = PreviousSectionAspect;
-                    currentSpeed = PreviousSectionSpeed;
-                }
-                else
-                {
-                    currentAspect = AspectSequence[i - 1];
-                    currentSpeed = SpeedSequence[i - 1];
-                }
-
-                Aspect nextAspect = AspectSequence[i];
-                int nextSpeed = SpeedSequence[i];
-
-                if (currentAspect == Aspect.Stop)
-                {
-                    VcondList[i] = TVMSpeedType._RRR;
-                }
-                else if (nextSpeed == 30 && currentSpeed == 30)
-                {
-                    VcondList[i] = TVMSpeedType._RRR;
-                }
-                else if (nextAspect == Aspect.Stop)
-                {
-                    VcondList[i] = TVMSpeedType._80E;
-                }
-                else if (nextSpeed == 80 && currentSpeed == 80)
-                {
-                    VcondList[i] = TVMSpeedType._80E;
-                }
-                else if (nextAspect == Aspect.StopAndProceed) // MSTS TVM300 160E
-                {
-                    VcondList[i] = TVMSpeedType._160E;
-                }
-                else if (nextSpeed == 160 && currentSpeed == 160)
-                {
-                    VcondList[i] = TVMSpeedType._160E;
-                }
-                else if (nextAspect == Aspect.Approach_1) // MSTS TVM300 220E
-                {
-                    VcondList[i] = TVMSpeedType._220E;
-                }
-                else if (nextSpeed == 220 && currentSpeed == 220)
-                {
-                    // TODO : 220V not available currently
-                    VcondList[i] = TVMSpeedType._220E;
-                }
-                else if (nextAspect == Aspect.Approach_3)
-                {
-                    VcondList[i] = TVMSpeedType._270V;
-                }
-                else if (nextSpeed == 270 && currentSpeed == 270)
-                {
-                    VcondList[i] = TVMSpeedType._270V;
-                }
-                else
-                {
-                    VcondList[i] = TVMSpeedType._300V;
-                }
-            }
-
-            for (i = 0; i < TVMNumberOfBlockSections - 1; i++)
-            {
-                TVMSpeedType previousVcond;
-
-                if (i == 0)
-                {
-                    previousVcond = PreviousVcond;
-                }
-                else
-                {
-                    previousVcond = VcondList[i - 1];
-                }
-
-                TVMSpeedType currentVcond = VcondList[i];
-                TVMSpeedType nextVcond = VcondList[i + 1];
-
-                if (currentVcond == TVMSpeedType._300V)
-                {
-                    if (previousVcond == TVMSpeedType._220E || previousVcond == TVMSpeedType._270V)
-                    {
-                        if (nextVcond == TVMSpeedType._270V)
+                    case SignalType.BP_ANN:
+                    case SignalType.BP_EXE:
+                    case SignalType.CCT_ANN:
+                    case SignalType.CCT_EXE:
+                        if (lastSignalAspect.Contains("BSP_ABP"))
                         {
-                            VcondList[i] = TVMSpeedType._270V;
+                            SignalFeatures executionSignal = NextGenericSignalFeatures("REPEATER", 0, 2500f);
+                            float startDistanceM = 1500f;
+
+                            // If signal found
+                            if (executionSignal.DistanceM <= 2500f && executionSignal.TextAspect.Contains("FR_BP_EXECUTION_PRESENTE"))
+                            {
+                                startDistanceM = executionSignal.DistanceM;
+                            }
+
+                            float endDistanceM = startDistanceM + 180f + TrainLengthM() + 25f;
+
+                            TVMLowerPantographStartOdometer.Setup(startDistanceM);
+                            TVMLowerPantographStartOdometer.Start();
+                            TVMLowerPantographEndOdometer.Setup(endDistanceM);
+                            TVMLowerPantographEndOdometer.Start();
+                            TVMLowerPantograph = true;
                         }
-                        else if (nextVcond == TVMSpeedType._300V)
+                        else if (lastSignalAspect.Contains("BSP_EBP"))
                         {
-                            VcondList[i] = TVMSpeedType._300V;
+                            TVMLowerPantographStartOdometer.Setup(0f);
+                            TVMLowerPantographStartOdometer.Start();
+                            TVMLowerPantographEndOdometer.Setup(180f + TrainLengthM() + 25f);
+                            TVMLowerPantographEndOdometer.Start();
+                            TVMLowerPantograph = true;
                         }
-                    }
-                }
-            }
-
-            Dictionary<TVMSpeedType, TVMSpeedType> TAB1 = TVM300Tab1;
-            Dictionary<TVMSpeedType, TVMSpeedType> TAB2 = TVM300Tab2;
-
-            // Calculate Vc, Ve, Va
-
-            // Initialize last block section
-            i = TVMNumberOfBlockSections - 1;
-            VcList[i] = VcondList[i];
-            VeList[i] = Min(TAB2[VcondList[i]], TAB1[VcList[i]]);
-            VaList[i] = TAB2[VcondList[i]];
-
-            // Calculate the sequence
-            for (i = TVMNumberOfBlockSections - 1; i > 0; i--)
-            {
-                VcList[i-1] = Min(VcondList[i-1], VeList[i]);
-                VeList[i-1] = Min(TAB2[VcondList[i-1]], TAB1[VcList[i-1]]);
-                VaList[i-1] = TAB2[VcList[i]];
-            }
-        }
-
-        protected void CalculateTvm430Sequence()
-        {
-            int i;
-
-            if (Signals[SignalType.NORMAL].SignalPassed)
-            {
-                PreviousSectionSpeed = SpeedSequence[0];
-                PreviousSectionAspect = AspectSequence[0];
-                PreviousVcond = VcondList[0];
-            }
-
-            int ignoreCount = 0;
-
-            // Get the 10 next signals (from 10th to 1st in order to be optimal)
-            for (i = TVMNumberOfBlockSections - 1; i >= 0; i--)
-            {
-                SpeedSequence[i] = Convert.ToInt32(MpS.ToKpH(NextSignalSpeedLimitMpS(i)));
-                AspectSequence[i] = NextSignalAspect(i);
-
-                if (SpeedSequence[i] <= 0f && AspectSequence[i] > Aspect.Stop)
-                {
-                    // Ignore
-                    ignoreCount++;
-                    i++;
-                }
-            }
-
-            // Calculate execution speeds (Vcond)
-            for (i = TVMNumberOfBlockSections - 1; i >= 0; i--)
-            {
-                Aspect currentAspect;
-                int currentSpeed;
-
-                if (i == 0)
-                {
-                    currentAspect = PreviousSectionAspect;
-                    currentSpeed = PreviousSectionSpeed;
-                }
-                else
-                {
-                    currentAspect = AspectSequence[i - 1];
-                    currentSpeed = SpeedSequence[i - 1];
-                }
-
-                Aspect nextAspect = AspectSequence[i];
-                int nextSpeed = SpeedSequence[i];
-
-                if (currentAspect == Aspect.Stop || (currentAspect == Aspect.StopAndProceed && TVMModel > TVMModelType.TVM300))
-                {
-                    VcondList[i] = TVMSpeedType._RRR;
-                }
-                else if (nextSpeed == 30 && currentSpeed == 30)
-                {
-                    VcondList[i] = TVMSpeedType._RRR;
-                }
-                else if (nextSpeed == 60 && currentSpeed == 60)
-                {
-                    VcondList[i] = TVMSpeedType._60E;
-                }
-                else if (nextAspect == Aspect.Stop && currentSpeed == 80)
-                {
-                    VcondList[i] = TVMSpeedType._80E;
-                }
-                else if (nextSpeed == 80 && currentSpeed == 80)
-                {
-                    VcondList[i] = TVMSpeedType._80E;
-                }
-                else if (nextSpeed == 130 && currentSpeed == 130)
-                {
-                    VcondList[i] = TVMSpeedType._130E;
-                }
-                else if (nextSpeed == 130 && currentSpeed == 170) // 130 kph HSL exit
-                {
-                    VcondList[i] = TVMSpeedType._130E;
-                }
-                else if (nextSpeed == 160 && currentSpeed == 160)
-                {
-                    VcondList[i] = TVMSpeedType._160E;
-                }
-                else if (nextSpeed == 160 && currentSpeed == 170) // 160 kph HSL exit
-                {
-                    VcondList[i] = TVMSpeedType._160E;
-                }
-                else if (nextSpeed == 170 && currentSpeed == 170f)
-                {
-                    VcondList[i] = TVMSpeedType._170E;
-                }
-                else if (nextSpeed == 200 && currentSpeed == 200)
-                {
-                    VcondList[i] = TVMSpeedType._200V;
-                }
-                else if (nextSpeed == 220 && currentSpeed == 220)
-                {
-                    // TODO : 220V not available currently
-                    VcondList[i] = TVMSpeedType._220E;
-                }
-                else if (nextSpeed == 220 && currentSpeed == 230) // 220 kph HSL exit
-                {
-                    // TODO : 220V not available currently
-                    VcondList[i] = TVMSpeedType._220E;
-                }
-                else if (nextSpeed == 230 && currentSpeed == 230)
-                {
-                    // TODO : 230V not available currently
-                    VcondList[i] = TVMSpeedType._230E;
-                }
-                else if (nextSpeed == 270 && currentSpeed == 270)
-                {
-                    VcondList[i] = TVMSpeedType._270V;
-                }
-                else if (nextSpeed == 300 && currentSpeed == 300
-                    || TVMModel == TVMModelType.TVM430_V300)
-                {
-                    VcondList[i] = TVMSpeedType._300V;
-                }
-                else
-                {
-                    VcondList[i] = TVMSpeedType._320V;
-                }
-            }
-
-            for (i = 0; i < TVMNumberOfBlockSections - 1; i++)
-            {
-                TVMSpeedType previousVcond;
-
-                if (i == 0)
-                {
-                    previousVcond = PreviousVcond;
-                }
-                else
-                {
-                    previousVcond = VcondList[i - 1];
-                }
-
-                TVMSpeedType currentVcond = VcondList[i];
-                TVMSpeedType nextVcond = VcondList[i + 1];
-
-                if (currentVcond == TVMSpeedType._320V)
-                {
-                    if (previousVcond == TVMSpeedType._230E || previousVcond == TVMSpeedType._270V)
-                    {
-                        if (nextVcond == TVMSpeedType._270V)
+                        else if (lastSignalAspect.Contains("BSP_AODJ"))
                         {
-                            VcondList[i] = TVMSpeedType._270V;
+                            SignalFeatures executionSignal = NextGenericSignalFeatures("REPEATER", 0, 2000f);
+                            float startDistanceM = 1000f;
+
+                            // If signal found
+                            if (executionSignal.DistanceM <= 2000f && executionSignal.TextAspect.Contains("FR_CCT_EXECUTION_PRESENTE"))
+                            {
+                                startDistanceM = executionSignal.DistanceM;
+                            }
+
+                            float endDistanceM = startDistanceM + 180f + TrainLengthM() + 25f;
+
+                            TVMOpenCircuitBreakerStartOdometer.Setup(startDistanceM);
+                            TVMOpenCircuitBreakerStartOdometer.Start();
+                            TVMOpenCircuitBreakerEndOdometer.Setup(endDistanceM);
+                            TVMOpenCircuitBreakerEndOdometer.Start();
+                            TVMOpenCircuitBreakerAutomatic = true;
                         }
-                        else if (nextVcond == TVMSpeedType._300V)
+                        else if (lastSignalAspect.Contains("BSP_EODJ"))
                         {
-                            VcondList[i] = TVMSpeedType._300V;
+                            TVMOpenCircuitBreakerStartOdometer.Setup(0f);
+                            TVMOpenCircuitBreakerStartOdometer.Start();
+                            TVMOpenCircuitBreakerEndOdometer.Setup(180f + TrainLengthM() + 25f);
+                            TVMOpenCircuitBreakerEndOdometer.Start();
+                            TVMOpenCircuitBreakerAutomatic = true;
                         }
-                    }
+                        break;
                 }
-            }
-
-            Dictionary<TVMSpeedType, TVMSpeedType> TAB1 = TVM430SncfTab1;
-            Dictionary<TVMSpeedType, TVMSpeedType> TAB2 = TVM430SncfTab2;
-
-            // Calculate Vc, Ve, Va
-
-            // Initialize last block section
-            i = TVMNumberOfBlockSections - 1;
-            VcList[i] = VcondList[i];
-            VeList[i] = Min(TAB2[VcondList[i]], TAB1[VcList[i]]);
-            VaList[i] = TAB2[VcondList[i]];
-
-            // Calculate the sequence
-            for (i = TVMNumberOfBlockSections - 1; i > 0; i--)
-            {
-                VcList[i - 1] = Min(VcondList[i - 1], VeList[i]);
-                VeList[i - 1] = Min(TAB2[VcondList[i - 1]], TAB1[VcList[i - 1]]);
-                VaList[i - 1] = TAB2[VcList[i]];
             }
         }
 
@@ -4151,7 +3358,7 @@ namespace ORTS.Scripting.Script
 
         protected void DetermineTvm300Aspect()
         {
-            List<string> nextNormalSignalTextAxpect = MstsSignalToTvmSignal(Signals[SignalType.NORMAL].NextSignal).TextAspect.Split(' ').ToList();
+            List<string> nextNormalSignalTextAxpect = Signals[SignalType.NORMAL].NextSignal.TextAspect.Split(' ').ToList();
 
             if (nextNormalSignalTextAxpect.Contains("FR_TVM300"))
             {
@@ -4208,7 +3415,7 @@ namespace ORTS.Scripting.Script
 
         protected void DetermineTvm430Aspect()
         {
-            List<string> nextNormalSignalTextAxpect = MstsSignalToTvmSignal(Signals[SignalType.NORMAL].NextSignal).TextAspect.Split(' ').ToList();
+            List<string> nextNormalSignalTextAxpect = Signals[SignalType.NORMAL].NextSignal.TextAspect.Split(' ').ToList();
 
             if (nextNormalSignalTextAxpect.Contains("FR_TVM430"))
             {
@@ -4340,6 +3547,92 @@ namespace ORTS.Scripting.Script
             }
         }
 
+        protected void UpdateTvmPunctualInformation()
+        {
+            if (TVMOpenCircuitBreaker)
+            {
+                if (CurrentDirection() == Direction.Reverse
+                    || (SpeedKpH() <= 30f && ArePantographsDown()))
+                {
+                    TVMOpenCircuitBreakerOrder = false;
+                }
+                else if (TVMOpenCircuitBreakerStartOdometer.Triggered)
+                {
+                    TVMOpenCircuitBreakerOrder = true;
+                }
+
+                if (TVMOpenCircuitBreakerEndOdometer.Triggered)
+                {
+                    TVMOpenCircuitBreakerStartOdometer.Stop();
+                    TVMOpenCircuitBreakerEndOdometer.Stop();
+                    TVMOpenCircuitBreaker = false;
+
+                    TVMOpenCircuitBreakerOrder = false;
+                }
+            }
+            else if (TVMOpenCircuitBreakerAutomatic)
+            {
+                if (CurrentDirection() == Direction.Reverse
+                    || (SpeedKpH() <= 30f && ArePantographsDown()))
+                {
+                    TVMTractionReductionOrder = false;
+                    TVMOpenCircuitBreakerOrder = false;
+                }
+                else if (TVMOpenCircuitBreakerStartOdometer.Triggered)
+                {
+                    TVMTractionReductionOrder = true;
+                    TVMOpenCircuitBreakerOrder = true;
+                }
+
+                if (TVMOpenCircuitBreakerEndOdometer.Triggered)
+                {
+                    TVMOpenCircuitBreakerStartOdometer.Stop();
+                    TVMOpenCircuitBreakerEndOdometer.Stop();
+                    TVMOpenCircuitBreakerAutomatic = false;
+
+                    TVMTractionReductionOrder = false;
+                    TVMOpenCircuitBreakerOrder = false;
+                    TVMCloseCircuitBreakerOrder = true;
+                    TVMCloseCircuitBreakerOrderTimer.Start();
+                }
+            }
+            else
+            {
+                TVMOpenCircuitBreakerOrder = false;
+            }
+
+            if (TVMCloseCircuitBreakerOrderTimer.Triggered)
+            {
+                TVMCloseCircuitBreakerOrder = false;
+                TVMCloseCircuitBreakerOrderTimer.Stop();
+            }
+
+            if (TVMLowerPantograph)
+            {
+                if (CurrentDirection() == Direction.Reverse
+                    || (SpeedKpH() <= 30f && ArePantographsDown()))
+                {
+                    TVMOpenCircuitBreakerOrder = false;
+                    TVMLowerPantographOrder = false;
+                }
+                else if (TVMLowerPantographStartOdometer.Triggered)
+                {
+                    TVMOpenCircuitBreakerOrder = true;
+                    TVMLowerPantographOrder = true;
+                }
+
+                if (TVMLowerPantographEndOdometer.Triggered)
+                {
+                    TVMLowerPantographStartOdometer.Stop();
+                    TVMLowerPantographEndOdometer.Stop();
+                    TVMLowerPantograph = false;
+
+                    TVMOpenCircuitBreakerOrder = false;
+                    TVMLowerPantographOrder = false;
+                }
+            }
+        }
+
         protected void UpdateTvmDisplay()
         {
             switch (TVMModel)
@@ -4358,8 +3651,6 @@ namespace ORTS.Scripting.Script
         protected void UpdateTvm300Display()
         {
             UpdateTvmCabSignal(TVMAspectCommand, TVMBlinkingCommand, TVMAspectCommand != TVMAspectPreviousCycle);
-
-            SetCabDisplayControl(TVM_Mask, TVMAspectCommand == TVMAspectType.None ? 0 : 1);
 
             SetCabDisplayControl(VY_CV, TVMCOVITEmergencyBraking || KarmEmergencyBraking ? 1 : 0);
             SetCabDisplayControl(VY_SECT, TVMOpenCircuitBreaker ? 1 : 0);
@@ -4391,8 +3682,6 @@ namespace ORTS.Scripting.Script
                     }
                 }
             }
-
-            SetCabDisplayControl(TVM_Mask, TVMAspectCommand == TVMAspectType.None ? 0 : 1);
 
             SetCabDisplayControl(VY_CV, TVMCOVITEmergencyBraking || KarmEmergencyBraking ? 1 : 0);
             SetCabDisplayControl(VY_SECT, TVMOpenCircuitBreaker ? 1 : 0);
@@ -5007,7 +4296,7 @@ namespace ORTS.Scripting.Script
             }
             else
             {
-                SignalFeatures nextSignal = MstsSignalToNewSignal(NextGenericSignalFeatures(signalType.ToString(), 0, 5000f), signalType);
+                SignalFeatures nextSignal = NextGenericSignalFeatures(signalType.ToString(), 0, 5000f);
 
                 SignalData signalData;
                 if (Signals.TryGetValue(signalType, out signalData))
