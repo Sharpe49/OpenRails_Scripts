@@ -3362,20 +3362,24 @@ namespace ORTS.Scripting.Script
 
             if (nextNormalSignalTextAxpect.Contains("FR_TVM300"))
             {
-                foreach (string part in nextNormalSignalTextAxpect)
+                bool error = false;
+
+                error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Ve")).Substring(2), out Ve);
+                error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Vc")).Substring(2), out Vc);
+                if (nextNormalSignalTextAxpect.Exists(x => x.StartsWith("Va")))
                 {
-                    if (part.StartsWith("Ve"))
-                    {
-                        Ve = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
-                    else if (part.StartsWith("Vc"))
-                    {
-                        Vc = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
-                    else if (part.StartsWith("Va"))
-                    {
-                        Va = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
+                    error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Va")).Substring(2), out Va);
+                }
+                else
+                {
+                    Va = TVMSpeedType.Any;
+                }
+
+                if (error)
+                {
+                    Ve = TVMSpeedType._000;
+                    Vc = TVMSpeedType._RRR;
+                    Va = TVMSpeedType.Any;
                 }
             }
             else
@@ -3419,20 +3423,24 @@ namespace ORTS.Scripting.Script
 
             if (nextNormalSignalTextAxpect.Contains("FR_TVM430"))
             {
-                foreach (string part in nextNormalSignalTextAxpect)
+                bool error = false;
+
+                error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Ve")).Substring(2), out Ve);
+                error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Vc")).Substring(2), out Vc);
+                if (nextNormalSignalTextAxpect.Exists(x => x.StartsWith("Va")))
                 {
-                    if (part.StartsWith("Ve"))
-                    {
-                        Ve = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
-                    else if (part.StartsWith("Vc"))
-                    {
-                        Vc = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
-                    else if (part.StartsWith("Va"))
-                    {
-                        Va = (TVMSpeedType)Enum.Parse(typeof(TVMSpeedType), "_" + part.Substring(2));
-                    }
+                    error |= !Enum.TryParse("_" + nextNormalSignalTextAxpect.FirstOrDefault(x => x.StartsWith("Va")).Substring(2), out Va);
+                }
+                else
+                {
+                    Va = TVMSpeedType.Any;
+                }
+
+                if (error)
+                {
+                    Ve = TVMSpeedType._000;
+                    Vc = TVMSpeedType._RRR;
+                    Va = TVMSpeedType.Any;
                 }
             }
             else
