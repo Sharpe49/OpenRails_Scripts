@@ -3278,7 +3278,7 @@ namespace ORTS.Scripting.Script
                     case SignalType.CCT_EXE:
                         if (lastSignalAspect.Contains("BSP_ABP"))
                         {
-                            SignalFeatures executionSignal = NextGenericSignalFeatures("REPEATER", 0, 2500f);
+                            SignalFeatures executionSignal = NextGenericSignalFeatures("BP_EXE", 0, 2500f);
                             float startDistanceM = 1500f;
 
                             // If signal found
@@ -3305,7 +3305,7 @@ namespace ORTS.Scripting.Script
                         }
                         else if (lastSignalAspect.Contains("BSP_AODJ"))
                         {
-                            SignalFeatures executionSignal = NextGenericSignalFeatures("REPEATER", 0, 2000f);
+                            SignalFeatures executionSignal = NextGenericSignalFeatures("CCT_EXE", 0, 2000f);
                             float startDistanceM = 1000f;
 
                             // If signal found
