@@ -777,9 +777,6 @@ namespace ORTS.Scripting.Script
         Timer VACMAReleasedAlertTimer;
         Timer VACMAReleasedEmergencyTimer;
 
-    // Brake traction cut-off
-        bool BrakeTractionCutOff = false;
-
     // Other variables
         float InitCount = 0;
 
@@ -1417,7 +1414,7 @@ namespace ORTS.Scripting.Script
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
                 SetPowerAuthorization(!EmergencyBraking);
-                SetTractionAuthorization(!BrakeTractionCutOff);
+                SetTractionAuthorization(!TractionCutOffRequested);
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);
@@ -5034,73 +5031,6 @@ namespace ORTS.Scripting.Script
                     signalData.PreviousNextSignalDistanceM = nextSignal.DistanceM;
 
                     Signals[signalType] = signalData;
-                }
-            }
-        }
-
-        public override void UpdateTractionCutOff()
-        {
-            // If BrakeCutsPowerForSpeedAbove is not set (== 0), the brake pressure check is always active.
-            if (SpeedMpS() >= BrakeCutsPowerForMinimumSpeedMpS())
-            {
-                switch (BrakeTractionCutOffMode())
-                {
-                    case BrakeTractionCutOffModeType.None:
-                        BrakeTractionCutOff = false;
-                        break;
-
-                    case BrakeTractionCutOffModeType.AirBrakeCylinderSinglePressure:
-                        if (LocomotiveBrakeCylinderPressureBar() >= BrakeCutsPowerAtBrakeCylinderPressureBar())
-                        {
-                            BrakeTractionCutOff = true;
-                        }
-                        else if (!BrakeCutsPowerUntilTractionCommandCancelled() || ThrottlePercent() <= 0f)
-                        {
-                            BrakeTractionCutOff = false;
-                        }
-                        break;
-
-                    case BrakeTractionCutOffModeType.AirBrakePipeSinglePressure:
-                        if (BrakePipePressureBar() <= BrakeCutsPowerAtBrakePipePressureBar())
-                        {
-                            BrakeTractionCutOff = true;
-                        }
-                        else if (!BrakeCutsPowerUntilTractionCommandCancelled() || ThrottlePercent() <= 0f)
-                        {
-                            BrakeTractionCutOff = false;
-                        }
-                        break;
-
-                    case BrakeTractionCutOffModeType.AirBrakePipeHysteresis:
-                        if (BrakePipePressureBar() <= BrakeCutsPowerAtBrakePipePressureBar())
-                        {
-                            BrakeTractionCutOff = true;
-                        }
-                        else if (BrakePipePressureBar() >= BrakeRestoresPowerAtBrakePipePressureBar()
-                            && (!BrakeCutsPowerUntilTractionCommandCancelled() || ThrottlePercent() <= 0f))
-                        {
-                            BrakeTractionCutOff = false;
-                        }
-                        break;
-
-                    case BrakeTractionCutOffModeType.VacuumBrakePipeHysteresis:
-                        if (BrakePipePressureBar() >= BrakeCutsPowerAtBrakePipePressureBar())
-                        {
-                            BrakeTractionCutOff = true;
-                        }
-                        else if (BrakePipePressureBar() <= BrakeRestoresPowerAtBrakePipePressureBar()
-                            && (!BrakeCutsPowerUntilTractionCommandCancelled() || ThrottlePercent() <= 0f))
-                        {
-                            BrakeTractionCutOff = false;
-                        }
-                        break;
-                }
-            }
-            else
-            {
-                if (!BrakeCutsPowerUntilTractionCommandCancelled() || ThrottlePercent() <= 0f)
-                {
-                    BrakeTractionCutOff = false;
                 }
             }
         }
