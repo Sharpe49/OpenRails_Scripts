@@ -556,11 +556,13 @@ namespace ORTS.Scripting.Script
         bool TVMOpenCircuitBreakerOrder = false;
         bool TVMCloseCircuitBreakerOrder = false;
         bool TVMTractionReductionOrder = false;
+        float TVMTractionReductionMaxThrottlePercent = 100f;
         bool TVMLowerPantograph = false;
         bool TVMLowerPantographOrder = false;
         OdoMeter TVMOpenCircuitBreakerStartOdometer;
         OdoMeter TVMOpenCircuitBreakerEndOdometer;
         Timer TVMCloseCircuitBreakerOrderTimer;
+        Timer TVMTractionResumptionTimer;
         OdoMeter TVMLowerPantographStartOdometer;
         OdoMeter TVMLowerPantographEndOdometer;
 
@@ -779,11 +781,13 @@ namespace ORTS.Scripting.Script
             TVMOpenCircuitBreakerStartOdometer = new OdoMeter(this);
             TVMOpenCircuitBreakerEndOdometer = new OdoMeter(this);
             TVMCloseCircuitBreakerOrderTimer = new Timer(this);
+            TVMTractionResumptionTimer = new Timer(this);
             TVMLowerPantographStartOdometer = new OdoMeter(this);
             TVMLowerPantographEndOdometer = new OdoMeter(this);
 
             TVMBlinker.Setup(1f);
             TVMCloseCircuitBreakerOrderTimer.Setup(3f);
+            TVMTractionResumptionTimer.Setup(3f);
 
             // TVM300 section
             TVM300DecodingFileName = GetStringParameter("TVM300", "DecodingFileName", "..\\..\\common.script\\TGVR_TVM300.csv");
@@ -1000,7 +1004,8 @@ namespace ORTS.Scripting.Script
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
                 SetPowerAuthorization(!EmergencyBraking && !TVMOpenCircuitBreakerOrder);
-                SetTractionAuthorization(!TVMTractionReductionOrder && !TractionCutOffRequested);
+                SetTractionAuthorization(!TractionCutOffRequested);
+                SetMaxThrottlePercent(TVMTractionReductionOrder ? TVMTractionReductionMaxThrottlePercent : 100f);
                 SetCircuitBreakerClosingOrder(TVMCloseCircuitBreakerOrder);
                 if (TVMLowerPantographOrder)
                 {
@@ -3581,12 +3586,26 @@ namespace ORTS.Scripting.Script
                     || (SpeedKpH() <= 30f && ArePantographsDown()))
                 {
                     TVMTractionReductionOrder = false;
+                    TVMTractionReductionMaxThrottlePercent = 100f;
                     TVMOpenCircuitBreakerOrder = false;
                 }
                 else if (TVMOpenCircuitBreakerStartOdometer.Triggered)
                 {
                     TVMTractionReductionOrder = true;
+                    TVMTractionReductionMaxThrottlePercent = 0f;
                     TVMOpenCircuitBreakerOrder = true;
+                }
+                else if (TVMOpenCircuitBreakerStartOdometer.RemainingValue <= 500f)
+                {
+                    TVMTractionReductionOrder = true;
+                    TVMTractionReductionMaxThrottlePercent = TVMOpenCircuitBreakerStartOdometer.RemainingValue / 5f;
+                    TVMOpenCircuitBreakerOrder = false;
+                }
+                else
+                {
+                    TVMTractionReductionOrder = false;
+                    TVMTractionReductionMaxThrottlePercent = 100f;
+                    TVMOpenCircuitBreakerOrder = false;
                 }
 
                 if (TVMOpenCircuitBreakerEndOdometer.Triggered)
@@ -3595,7 +3614,6 @@ namespace ORTS.Scripting.Script
                     TVMOpenCircuitBreakerEndOdometer.Stop();
                     TVMOpenCircuitBreakerAutomatic = false;
 
-                    TVMTractionReductionOrder = false;
                     TVMOpenCircuitBreakerOrder = false;
                     TVMCloseCircuitBreakerOrder = true;
                     TVMCloseCircuitBreakerOrderTimer.Start();
@@ -3603,13 +3621,35 @@ namespace ORTS.Scripting.Script
             }
             else
             {
-                TVMOpenCircuitBreakerOrder = false;
-            }
+                if (TVMCloseCircuitBreakerOrderTimer.Triggered)
+                {
+                    if (TVMTractionReductionOrder)
+                    {
+                        TVMTractionResumptionTimer.Start();
+                    }
 
-            if (TVMCloseCircuitBreakerOrderTimer.Triggered)
-            {
-                TVMCloseCircuitBreakerOrder = false;
-                TVMCloseCircuitBreakerOrderTimer.Stop();
+                    TVMCloseCircuitBreakerOrder = false;
+                    TVMCloseCircuitBreakerOrderTimer.Stop();
+                }
+
+                if (TVMTractionResumptionTimer.Started)
+                {
+                    if (TVMTractionResumptionTimer.Triggered)
+                    {
+                        TVMTractionResumptionTimer.Stop();
+                        TVMTractionReductionOrder = false;
+                        TVMTractionReductionMaxThrottlePercent = 100f;
+                    }
+                    else
+                    {
+                        TVMTractionReductionOrder = true;
+                        TVMTractionReductionMaxThrottlePercent =
+                            (TVMTractionResumptionTimer.AlarmValue - TVMTractionResumptionTimer.RemainingValue) /
+                            TVMTractionResumptionTimer.AlarmValue * 100f;
+                    }
+                }
+
+                TVMOpenCircuitBreakerOrder = false;
             }
 
             if (TVMLowerPantograph)
