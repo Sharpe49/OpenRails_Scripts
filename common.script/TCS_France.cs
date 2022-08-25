@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace ORTS.Scripting.Script
 {
@@ -385,6 +386,7 @@ namespace ORTS.Scripting.Script
         ETCSLevel CurrentETCSLevel = ETCSLevel.L0;
 
     // Properties
+        string ScriptDirectoryPath;
         bool RearmingButton { get; set; } = false;
 
     // Train parameters
@@ -795,6 +797,8 @@ namespace ORTS.Scripting.Script
 
         public override void Initialize()
         {
+            InitializeScriptDirectoryPath();
+
             // General section
             VACMAPresent = GetBoolParameter("General", "VACMAPresent", true);
             RSOPresent = GetBoolParameter("General", "RSOPresent", true);
@@ -868,10 +872,10 @@ namespace ORTS.Scripting.Script
             TVMBlinker.Setup(1f);
 
             // TVM300 section
-            TVM300DecodingFileName = GetStringParameter("TVM300", "DecodingFileName", "..\\..\\common.script\\TGVR_TVM300.csv");
+            TVM300DecodingFileName = GetStringParameter("TVM300", "DecodingFileName", "TGVR_TVM300.csv");
 
             {
-                string path = Path.Combine(Path.GetDirectoryName(Locomotive().WagFilePath), "Script", TVM300DecodingFileName);
+                string path = Path.Combine(ScriptDirectoryPath, TVM300DecodingFileName);
 
                 if (File.Exists(path))
                 {
@@ -906,14 +910,14 @@ namespace ORTS.Scripting.Script
 
             // TVM430 section
             TVM430TrainSpeedLimitMpS = MpS.FromKpH(GetFloatParameter("TVM430", "TrainSpeedLimitKpH", 320f));
-            TVM430DecodingFileName = GetStringParameter("TVM430", "DecodingFileName", "..\\..\\common.script\\TGVR_TVM430.csv");
+            TVM430DecodingFileName = GetStringParameter("TVM430", "DecodingFileName", "TGVR_TVM430.csv");
 
             TVM430AspectChangeTimer = new Timer(this);
 
             TVM430AspectChangeTimer.Setup(4.7f);
 
             {
-                string path = Path.Combine(Path.GetDirectoryName(Locomotive().WagFilePath), "Script", TVM430DecodingFileName);
+                string path = Path.Combine(ScriptDirectoryPath, TVM430DecodingFileName);
 
                 if (File.Exists(path))
                 {
@@ -1021,6 +1025,11 @@ namespace ORTS.Scripting.Script
             Activated = true;
 
             SetNextSignalAspect(Aspect.Clear_1);
+        }
+
+        public void InitializeScriptDirectoryPath([CallerFilePath] string sourceFilePath = "")
+        {
+            ScriptDirectoryPath = Path.GetDirectoryName(Path.GetFullPath(sourceFilePath));
         }
 
         public override void InitializeMoving()
