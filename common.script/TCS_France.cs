@@ -170,6 +170,7 @@ namespace ORTS.Scripting.Script
         int KVBSpeedRestrictionTargetSignalNumber = -1;
         float KVBSpeedRestrictionTargetDistanceM = float.PositiveInfinity;
         float KVBSpeedRestrictionTargetSpeedMpS = float.PositiveInfinity;
+        OdoMeter KVBTrainLengthOdometerFVL;
 
         float KVBDeclivity = 0f;                            // i
 
@@ -361,6 +362,7 @@ namespace ORTS.Scripting.Script
 
             KVBHSLStartOdometer = new OdoMeter(this);
             KVBHSLStartOdometer.Setup(450f);
+            KVBTrainLengthOdometerFVL = new OdoMeter(this);
 
             // TVM common section
             TVMCOVITInhibited = GetBoolParameter("TVM", "CovitInhibited", false);
@@ -723,6 +725,8 @@ namespace ORTS.Scripting.Script
         protected void UpdateKVBParameters()
         {
             KVBTrainLengthM = (float)Math.Ceiling((double)(TrainLengthM() / 100f)) * 100f;
+            KVBTrainLengthOdometerFVL.Setup(KVBTrainLengthM);
+
             if (ElectroPneumaticBrake)
                 KVBDelayBeforeBrakingEstablishedS = 2f;
             else if (HeavyFreightTrain)
@@ -765,17 +769,27 @@ namespace ORTS.Scripting.Script
                 KVBLastSignalAspect = Max(nextNormalSignalAspect, nextDistantSignalAspect);
             }
 
-            // If not on sight, current track node is longer than train length and no switch is in front of us, release the signal speed limit
-            float trackNodeOFfset = Locomotive().Train.FrontTDBTraveller.TrackNodeOffset;
-            float nextDivergingSwitchDistanceM = NextDivergingSwitchDistanceM(500f);
-            float nextTrailingDivergingSwitchDistanceM = NextTrailingDivergingSwitchDistanceM(500f);
-            if (!KVBOnSight
-                && trackNodeOFfset > KVBTrainLengthM
-                && nextDivergingSwitchDistanceM > nextNormalSignalDistance
-                && nextTrailingDivergingSwitchDistanceM > nextNormalSignalDistance
-                )
+            if (KVBLastSignalSpeedLimitMpS < float.PositiveInfinity)
             {
-                KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
+                if (KVBTrainLengthOdometerFVL.Started)
+                {
+                    if (KVBTrainLengthOdometerFVL.Triggered)
+                    {
+                        KVBLastSignalSpeedLimitMpS = float.PositiveInfinity;
+                        KVBTrainLengthOdometerFVL.Stop();
+                    }
+                }
+                else
+                {
+                    float nextDivergingSwitchDistanceM = NextDivergingSwitchDistanceM(500f);
+                    float nextTrailingDivergingSwitchDistanceM = NextTrailingDivergingSwitchDistanceM(500f);
+                    if (!KVBOnSight
+                        && nextDivergingSwitchDistanceM > 500f
+                        && nextTrailingDivergingSwitchDistanceM > 500f)
+                    {
+                        KVBTrainLengthOdometerFVL.Start();
+                    }
+                }
             }
 
             if ((NormalSignalPassed || DistantSignalPassed) && SpeedMpS() > 0.1f)
