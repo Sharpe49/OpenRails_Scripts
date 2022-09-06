@@ -23,7 +23,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\TCS_France.sms" 
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Advice : In order to have a better ergonomy with the alerter, swap the SPACE and Z keys.
-For the acknowledge button (Control Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
+For the acknowledge button (Control TCS Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
 
 FR :
 Ce script pour Open Rails reproduit le comportement des systèmes de sécurité des trains français.
@@ -42,7 +42,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\TCS_France.sms" 
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE (Sifflet par défaut) et W (Veille automatique par défaut).
-De même, pour la touche d'acquittement (Contrôle Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
+De même, pour la touche d'acquittement (Contrôle TCS Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
 
 ## Old_TCS_France
 
@@ -61,7 +61,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.s
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Advice : In order to have a better ergonomy with the alerter, swap the SPACE and Z keys.
-For the acknowledge button (Control Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
+For the acknowledge button (Control TCS Generic 1), assign the key Q (Doors Left by default). You can assign Ctrl+A for the opening of the doors on the left.
 
 FR :
 Ce script pour Open Rails reproduit le comportement des systèmes de sécurité des trains français plus anciens (notamment sans KVB).
@@ -78,7 +78,7 @@ ORTSTrainControlSystemSound( "..\\..\\common.sound\\TCS_France\\Old_TCS_France.s
 ORTSTrainControlSystemParameters( "..\\..\\common.script\\< name of your INI file >" )  
 
 Conseil : Pour avoir une meilleure ergonomie avec la veille automatique, intervertissez les touches ESPACE et W.
-De même, pour la touche d'acquittement (Contrôle Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
+De même, pour la touche d'acquittement (Contrôle TCS Générique 1), assignez la touche A (Portes Gauche par défaut). Vous pouvez assigner Ctrl+A pour l'ouverture des portes à gauche.
 
 ## PBL2BrakeController
 
@@ -106,7 +106,8 @@ ORTSTrainBrakeController( "..\\..\\common.script\\PBA2BrakeController.cs" )
 
 ## SNCFCircuitBreaker
 
-EN : This script reproduces the behaviour of the circuit breaker present in modern SNCF locomotives.
+EN :
+This script reproduces the behaviour of the circuit breaker present in modern electric SNCF locomotives.
 To activate the script, in your ENG file, in the Engine section, write this parameter:  
 ORTSCircuitBreaker( "..\\..\\common.script\\SNCFCircuitBreaker.cs" )  
 
@@ -115,10 +116,40 @@ The default key assignments for the circuit breaker are:
 - Shift+O for the circuit breaker closing authrorization switch Z(DJ)
 
 FR :
-Ce script pour Open Rails reproduit le comportement du disjoncteur présent dans les locomotives SNCF modernes.
+Ce script pour Open Rails reproduit le comportement du disjoncteur présent dans les locomotives électriques modernes de la SNCF.
 Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ce paramètre :  
 ORTSCircuitBreaker( "..\\..\\common.script\\SNCFCircuitBreaker.cs" )  
 
 Les touches pour contrôler le disjoncteur sont, par défaut :
 - O pour le bouton de fermeture du disjonteur BP(DJ)
 - Shift+O pour l'interrupteur d'autorisation de fermeture du disjoncteur Z(DJ)
+
+## SNCFTractionCutOffRelay
+
+EN :
+This script reproduces the behaviour of the traction cut-off relay present in modern diesel SNCF locomotives.
+To activate the script, in your ENG file, in the Engine section, write this parameter:  
+ORTSTractionCutOffRelay( "..\\..\\common.script\\SNCFTractionCutOffRelay.cs" )  
+
+The default key assignments for the traction cut-off relay are:
+- O for the traction cut-off relay closing order button BP(R)QT
+
+FR :
+Ce script pour Open Rails reproduit le comportement du relais de traction présent dans les locomotives diesel modernes de la SNCF.
+Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ce paramètre :  
+ORTSTractionCutOffRelay( "..\\..\\common.script\\SNCFTractionCutOffRelay.cs" )  
+
+Les touches pour contrôler le relais de traction sont, par défaut :
+- O pour le bouton de réarmement du relais de traction BP(R)QT
+
+## PowerSupply
+
+EN :
+Those scripts reproduce the behaviour of the power supply system of several type of locomotives.
+To activate the script, in your ENG file, in the Engine section, write this parameter (example for CC72000 and CC72100 diesel locomotives):  
+ORTSPowerSupply( "..\\..\\common.script\\SNCFCC72x00PowerSupply.cs" )
+
+FR :
+Ces scripts reproduisent le comportement du système de puissance de plusieurs types de locomotives.
+Pour activer le script, dans votre fichier ENG, dans la section Engine, écrivez ce paramètre (exemple pour les locomotives diesel CC72000 et CC72100) :  
+ORTSPowerSupply( "..\\..\\common.script\\SNCFCC72x00PowerSupply.cs" )
