@@ -1404,7 +1404,6 @@ namespace ORTS.Scripting.Script
                 UpdateTvm();
                 UpdateKarm();
                 UpdateKvb();
-                UpdateTractionCutOff();
 
                 if (RSOEmergencyBraking
                     || KVBEmergencyBraking
@@ -1423,7 +1422,6 @@ namespace ORTS.Scripting.Script
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
                 SetPowerAuthorization(!EmergencyBraking);
-                SetTractionAuthorization(!TractionCutOffRequested);
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);

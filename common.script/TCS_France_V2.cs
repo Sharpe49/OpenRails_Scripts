@@ -994,7 +994,6 @@ namespace ORTS.Scripting.Script
                 UpdateTvm();
                 UpdateKarm();
                 UpdateKvb();
-                UpdateTractionCutOff();
 
                 if (RSOEmergencyBraking
                     || KVBEmergencyBraking
@@ -1013,7 +1012,6 @@ namespace ORTS.Scripting.Script
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
                 SetPowerAuthorization(!EmergencyBraking && !TVMOpenCircuitBreakerOrder);
-                SetTractionAuthorization(!TractionCutOffRequested);
                 SetMaxThrottlePercent(TVMTractionReductionOrder ? TVMTractionReductionMaxThrottlePercent : 100f);
                 SetCircuitBreakerClosingOrder(TVMCloseCircuitBreakerOrder);
                 if (TVMLowerPantographOrder)
