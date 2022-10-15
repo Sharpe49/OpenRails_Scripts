@@ -1426,6 +1426,8 @@ namespace ORTS.Scripting.Script
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);
                 RSOType3Inhibition = (!TVM300Present && !TVM430Present) || !TVMCOVITInhibited;
+
+                SetCabDisplayControl(VY_CO_URG, IsLowVoltagePowerSupplyOn() && !IsCabPowerSupplyOn() ? 1 : 0);
             }
         }
 
