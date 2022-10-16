@@ -1,0 +1,3 @@
+﻿[*.cs]
+csharp_wrap_before_binary_opsign = true:suggestion
+dotnet_sort_system_directives_first = true
