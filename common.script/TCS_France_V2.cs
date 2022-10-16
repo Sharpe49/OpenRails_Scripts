@@ -3539,9 +3539,11 @@ namespace ORTS.Scripting.Script
                 SetCurrentSpeedLimitMpS(TVMStartControlSpeedMpS);
                 SetNextSpeedLimitMpS(TVMEndControlSpeedMpS);
 
+                float distanceEndOfBlockM = FindNextSignalWithTextAspect("EOB", SignalType.NORMAL, 10, 5000).DistanceM;
+
                 float SpeedCurveMpS = Math.Min(
                     SpeedCurve(
-                        NextSignalDistanceM(0),
+                        distanceEndOfBlockM,
                         TVMEndControlSpeedMpS,
                         0,
                         0,
