@@ -16,16 +16,14 @@
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
 using System;
-using System.Collections.Generic;
-using System.IO;
-using ORTS.Scripting.Api;
 using Orts.Simulation.RollingStocks.SubSystems.Controllers;
+using ORTS.Scripting.Api;
 
 namespace ORTS.Scripting.Script
 {
     public class PBL2BrakeController : BrakeController
     {
-        enum State
+        public enum State
         {
             Overcharge,
             OverchargeElimination,
@@ -36,6 +34,13 @@ namespace ORTS.Scripting.Script
             Emergency
         }
 
+        public enum ControllerPosition
+        {
+            Release = -1,
+            Hold = 0,
+            Apply = 1,
+        }
+
         public float OverchargeValue { get; private set; }
         public float QuickReleaseValue { get; private set; }
         public float ReleaseValue { get; private set; }
@@ -43,38 +48,42 @@ namespace ORTS.Scripting.Script
         public float ApplyValue { get; private set; }
         public float EmergencyValue { get; private set; }
 
+        public int ReleaseNotch { get; private set; }
+        public int HoldNotch { get; private set; }
+        public int ApplyNotch { get; private set; }
+        private Timer ResetTimer { get; set; }
+
         // brake controller values
         private float OverchargePressureBar = 0.4f;
         private float OverchargeEleminationPressureRateBarpS = 0.0025f;
         private float FirstDepressureBar = 0.5f;
         private float BrakeReleasedDepressureBar = 0.2f;
 
-        protected float CurrentPressure;
-
         private State CurrentState;
+        private ControllerPosition CurrentPosition = ControllerPosition.Hold;
 
         private bool FirstDepression = false;
         private bool Neutral = false;
         private bool Overcharge = false;
         private bool OverchargeElimination = false;
         private bool QuickRelease = false;
-        private bool Release = false;
-        private bool Apply = false;
 
         private float RegulatorPressureBar = 0.0f;
 
-        public PBL2BrakeController()
-        {
-        }
+        private float? AiBrakeTargetPercent = null;
 
         public override void Initialize()
         {
+            ResetTimer = new Timer(this);
+            ResetTimer.Setup(0.1f);
+
             foreach (MSTSNotch notch in Notches())
             {
                 switch (notch.Type)
                 {
                     case ControllerState.Release:
                         ReleaseValue = notch.Value;
+                        ReleaseNotch = Notches().IndexOf(notch);
                         break;
                     case ControllerState.FullQuickRelease:
                         OverchargeValue = notch.Value;
@@ -83,11 +92,13 @@ namespace ORTS.Scripting.Script
                     case ControllerState.Lap:
                     case ControllerState.Hold:
                         HoldValue = notch.Value;
+                        HoldNotch = Notches().IndexOf(notch);
                         break;
                     case ControllerState.Apply:
                     case ControllerState.GSelfLap:
                     case ControllerState.GSelfLapH:
                         ApplyValue = notch.Value;
+                        ApplyNotch = Notches().IndexOf(notch);
                         break;
                     case ControllerState.Emergency:
                         EmergencyValue = notch.Value;
@@ -102,12 +113,32 @@ namespace ORTS.Scripting.Script
 
         public override float Update(float elapsedSeconds)
         {
-            if (Apply)
-                SetCurrentValue(ApplyValue);
-            else if (Release)
-                SetCurrentValue(ReleaseValue);
-            else
-                SetCurrentValue(HoldValue);
+            if (ResetTimer.Triggered)
+            {
+                CurrentPosition = ControllerPosition.Hold;
+                ResetTimer.Stop();
+            }
+
+            switch (CurrentPosition)
+            {
+                case ControllerPosition.Apply:
+                    SetCurrentValue(ApplyValue);
+                    SetIntermediateValue(0.1f);
+                    SetCurrentNotch(ApplyNotch);
+                    break;
+
+                case ControllerPosition.Hold:
+                    SetCurrentValue(HoldValue);
+                    SetIntermediateValue(0);
+                    SetCurrentNotch(HoldNotch);
+                    break;
+
+                case ControllerPosition.Release:
+                    SetCurrentValue(ReleaseValue);
+                    SetIntermediateValue(-0.1f);
+                    SetCurrentNotch(ReleaseNotch);
+                    break;
+            }
 
             return CurrentValue();
         }
@@ -116,21 +147,28 @@ namespace ORTS.Scripting.Script
         {
             RegulatorPressureBar = Math.Min(MaxPressureBar(), MainReservoirPressureBar());
 
-            if (!FirstDepression && Apply && pressureBar > Math.Max(RegulatorPressureBar - FirstDepressureBar, 0))
+            if (AiBrakeTargetPercent != null)
+            {
+                pressureBar = RegulatorPressureBar - (float)AiBrakeTargetPercent * FullServReductionBar();
+                epPressureBar = (float)AiBrakeTargetPercent * MaxPressureBar();
+                return;
+            }
+
+            if (!FirstDepression && CurrentPosition == ControllerPosition.Apply && pressureBar > Math.Max(RegulatorPressureBar - FirstDepressureBar, 0))
                 FirstDepression = true;
             else if (FirstDepression && pressureBar <= Math.Max(RegulatorPressureBar - FirstDepressureBar, 0))
                 FirstDepression = false;
 
-            if (Apply && Overcharge)
+            if (CurrentPosition == ControllerPosition.Apply && Overcharge)
                 Overcharge = false;
-            if (Apply && QuickRelease)
+            if (CurrentPosition == ControllerPosition.Apply && QuickRelease)
                 QuickRelease = false;
 
             if (EmergencyBrakingPushButton() || TCSEmergencyBraking())
                 CurrentState = State.Emergency;
             else if (
-                Apply && pressureBar > RegulatorPressureBar - FullServReductionBar()
-                || FirstDepression && !Release && !QuickRelease && pressureBar > RegulatorPressureBar - FirstDepressureBar
+                CurrentPosition == ControllerPosition.Apply && pressureBar > RegulatorPressureBar - FullServReductionBar()
+                || FirstDepression && CurrentPosition != ControllerPosition.Release && !QuickRelease && pressureBar > RegulatorPressureBar - FirstDepressureBar
                 )
                 CurrentState = State.Apply;
             else if (OverchargeElimination && pressureBar > RegulatorPressureBar)
@@ -141,7 +179,7 @@ namespace ORTS.Scripting.Script
                 CurrentState = State.QuickRelease;
             else if (
                 !Neutral && (
-                    Release && pressureBar < RegulatorPressureBar
+                    CurrentPosition == ControllerPosition.Release && pressureBar < RegulatorPressureBar
                     || !FirstDepression && pressureBar > RegulatorPressureBar - BrakeReleasedDepressureBar && pressureBar < RegulatorPressureBar
                     || pressureBar < RegulatorPressureBar - FullServReductionBar()
                     )
@@ -258,19 +296,25 @@ namespace ORTS.Scripting.Script
             switch (evt)
             {
                 case BrakeControllerEvent.StartIncrease:
-                    Apply = true;
+                    CurrentPosition = ControllerPosition.Apply;
+                    QuickRelease = false;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.StopIncrease:
-                    Apply = false;
+                    CurrentPosition = ControllerPosition.Hold;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.StartDecrease:
-                    Release = true;
+                    CurrentPosition = ControllerPosition.Release;
+                    QuickRelease = false;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.StopDecrease:
-                    Release = false;
+                    CurrentPosition = ControllerPosition.Hold;
+                    AiBrakeTargetPercent = null;
                     break;
             }
         }
@@ -280,47 +324,35 @@ namespace ORTS.Scripting.Script
             switch (evt)
             {
                 case BrakeControllerEvent.StartIncrease:
-                    Apply = true;
+                    CurrentPosition = ControllerPosition.Apply;
+                    QuickRelease = false;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.StartDecrease:
-                    Release = true;
+                    CurrentPosition = ControllerPosition.Release;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.StartDecreaseToZero:
                     QuickRelease = true;
+                    AiBrakeTargetPercent = null;
                     break;
 
                 case BrakeControllerEvent.SetCurrentPercent:
                     if (value != null)
                     {
-                        float percent = value ?? 0F;
-                        percent *= 100;
-
-                        if (percent < 40)
-                        {
-                            Apply = true;
-                            Release = false;
-                        }
-                        else if (percent > 60)
-                        {
-                            Apply = false;
-                            Release = true;
-                        }
-                        else
-                        {
-                            Apply = false;
-                            Release = false;
-                        }
+                        AiBrakeTargetPercent = value;
                     }
                     break;
 
                 case BrakeControllerEvent.SetCurrentValue:
                     if (value != null)
                     {
-                        float newValue = value ?? 0F;
+                        float newValue = (float)value;
                         SetValue(newValue);
                     }
+                    AiBrakeTargetPercent = null;
                     break;
             }
         }
@@ -374,37 +406,19 @@ namespace ORTS.Scripting.Script
 
         private void SetValue(float v)
         {
-            SetCurrentValue(v);
-            
-            if (CurrentValue() == EmergencyValue)
+            ResetTimer.Start();
+
+            if (v > 0)
             {
-                Apply = false;
-                Release = false;
-                QuickRelease = false;
+                CurrentPosition = ControllerPosition.Apply;
             }
-            else if (CurrentValue() == ApplyValue)
+            else if (v < 0)
             {
-                Apply = true;
-                Release = false;
-                QuickRelease = false;
+                CurrentPosition = ControllerPosition.Release;
             }
-            else if (CurrentValue() == HoldValue)
+            else
             {
-                Apply = false;
-                Release = false;
-                QuickRelease = false;
-            }
-            else if (CurrentValue() == ReleaseValue)
-            {
-                Apply = false;
-                Release = true;
-                QuickRelease = false;
-            }
-            else if (CurrentValue() == QuickReleaseValue)
-            {
-                Apply = false;
-                Release = false;
-                QuickRelease = true;
+                CurrentPosition = ControllerPosition.Hold;
             }
         }
     }
