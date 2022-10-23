@@ -1024,6 +1024,7 @@ namespace ORTS.Scripting.Script
                 RSOType3Inhibition = (!TVM300Present && !TVM430Present) || !TVMCOVITInhibited;
 
                 SetCabDisplayControl(VY_CO_URG, IsLowVoltagePowerSupplyOn() && !IsCabPowerSupplyOn() ? 1 : 0);
+                SetCabDisplayControl(VY_CO_Z, IsLowVoltagePowerSupplyOn() && !IsCabPowerSupplyOn() ? 1 : 0);
             }
         }
 
