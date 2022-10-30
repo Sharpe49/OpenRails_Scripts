@@ -120,20 +120,20 @@ namespace ORTS.Scripting.Script
             {
                 case ControllerPosition.Apply:
                     SetCurrentValue(ApplyValue);
-                    SetIntermediateValue(0.1f);
-                    SetCurrentNotch(ApplyNotch);
+                    IntermediateValue = 0.1f;
+                    CurrentNotch = ApplyNotch;
                     break;
 
                 case ControllerPosition.Hold:
                     SetCurrentValue(HoldValue);
-                    SetIntermediateValue(0);
-                    SetCurrentNotch(HoldNotch);
+                    IntermediateValue = 0;
+                    CurrentNotch = HoldNotch;
                     break;
 
                 case ControllerPosition.Release:
                     SetCurrentValue(ReleaseValue);
-                    SetIntermediateValue(-0.1f);
-                    SetCurrentNotch(ReleaseNotch);
+                    IntermediateValue = -0.1f;
+                    CurrentNotch = ReleaseNotch;
                     break;
             }
 
