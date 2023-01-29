@@ -1029,110 +1029,139 @@ namespace ORTS.Scripting.Script
         {
             if (RSOPresent && IsSpeedControlEnabled())
             {
-                if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                if (IsCabPowerSupplyOn())
                 {
-                    RSOEmergencyTimer.Start();
+                    if ((RSOClosedSignal && !RSOType2Inhibition) || (TVMClosedSignal && !RSOType3Inhibition))
+                    {
+                        RSOEmergencyTimer.Start();
 
-                    if (RSOPressed)
-                    {
-                        RSOState = RSOStateType.TriggeredPressed;
+                        if (RSOPressed)
+                        {
+                            RSOState = RSOStateType.TriggeredPressed;
+                        }
+                        else
+                        {
+                            RSOState = RSOStateType.TriggeredBlinking;
+                        }
                     }
-                    else
+
+                    if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
                     {
-                        RSOState = RSOStateType.TriggeredBlinking;
+                        RSOEmergencyTimer.Stop();
+                        RSOState = RSOStateType.Off;
                     }
+
+                    switch (RSOState)
+                    {
+                        case RSOStateType.Init:
+                            if (!RSOBlinker.Started)
+                            {
+                                RSOBlinker.Start();
+                            }
+
+                            SetCabDisplayControl(LS_SF, RSOBlinker.On || RSOPressed ? 1 : 0);
+                            break;
+
+                        case RSOStateType.Off:
+                            if (RSOBlinker.Started)
+                            {
+                                RSOBlinker.Stop();
+                            }
+
+                            SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
+                            break;
+
+                        case RSOStateType.TriggeredPressed:
+                            SetCabDisplayControl(LS_SF, 0);
+
+                            if (!RSOPressed)
+                            {
+                                RSOState = RSOStateType.TriggeredFixed;
+                                RSOEmergencyTimer.Stop();
+                            }
+
+                            break;
+
+                        case RSOStateType.TriggeredBlinking:
+                            if (!RSOBlinker.Started)
+                            {
+                                RSOBlinker.Start();
+                            }
+
+                            SetCabDisplayControl(LS_SF, RSOBlinker.On ? 1 : 0);
+
+                            if (!RSOPressed && RSOPreviousPressed)
+                            {
+                                RSOState = RSOStateType.TriggeredFixed;
+                                RSOEmergencyTimer.Stop();
+                            }
+
+                            break;
+
+                        case RSOStateType.TriggeredFixed:
+                            SetCabDisplayControl(LS_SF, 1);
+                            break;
+                    }
+
+                    if (RSOEmergencyTimer.Triggered)
+                    {
+                        RSOEmergencyBraking = true;
+                    }
+                    else if (RearmingButton)
+                    {
+                        RSOEmergencyBraking = false;
+                    }
+
+                    SetCabDisplayControl(VY_SOS_RSO, RSOEmergencyBraking ? 1 : 0);
+
+                    if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
+                    {
+                        TriggerKvbBipSound(0.3f);
+                    }
+
+                    RSOPreviousClosedSignal = RSOClosedSignal;
+
+                    if (TVM300Present || TVM430Present)
+                    {
+                        if (TVMClosedSignal && !TVMPreviousClosedSignal)
+                        {
+                            TriggerKvbBipSound(0.3f);
+                        }
+
+                        if (TVMOpenedSignal && !TVMPreviousOpenedSignal)
+                        {
+                            TriggerKvbBipSound(0.3f);
+                        }
+
+                        TVMPreviousClosedSignal = TVMClosedSignal;
+                        TVMPreviousOpenedSignal = TVMOpenedSignal;
+                    }
+
+                    RSOPreviousPressed = RSOPressed;
+
+                    RSOClosedSignal = RSOOpenedSignal = false;
                 }
-
-                if (RSOOpenedSignal || TVMOpenedSignal || RSOCancelPressed)
+                else
                 {
+                    SetCabDisplayControl(LS_SF, 0);
+                    SetCabDisplayControl(VY_SOS_RSO, 0);
+
+                    RSOBlinker.Stop();
                     RSOEmergencyTimer.Stop();
-                    RSOState = RSOStateType.Off;
-                }
 
-                switch (RSOState)
-                {
-                    case RSOStateType.Init:
-                        if (!RSOBlinker.Started)
-                        {
-                            RSOBlinker.Start();
-                        }
-                        SetCabDisplayControl(LS_SF, RSOBlinker.On || RSOPressed ? 1 : 0);
-                        break;
-
-                    case RSOStateType.Off:
-                        if (RSOBlinker.Started)
-                        {
-                            RSOBlinker.Stop();
-                        }
-                        SetCabDisplayControl(LS_SF, RSOPressed ? 1 : 0);
-                        break;
-
-                    case RSOStateType.TriggeredPressed:
-                        SetCabDisplayControl(LS_SF, 0);
-
-                        if (!RSOPressed)
-                        {
-                            RSOState = RSOStateType.TriggeredFixed;
-                            RSOEmergencyTimer.Stop();
-                        }
-                        break;
-
-                    case RSOStateType.TriggeredBlinking:
-                        if (!RSOBlinker.Started)
-                        {
-                            RSOBlinker.Start();
-                        }
-                        SetCabDisplayControl(LS_SF, RSOBlinker.On ? 1 : 0);
-
-                        if (!RSOPressed && RSOPreviousPressed)
-                        {
-                            RSOState = RSOStateType.TriggeredFixed;
-                            RSOEmergencyTimer.Stop();
-                        }
-                        break;
-
-                    case RSOStateType.TriggeredFixed:
-                        SetCabDisplayControl(LS_SF, 1);
-                        break;
-                }
-
-                if (RSOEmergencyTimer.Triggered)
-                {
+                    RSOState = RSOStateType.Init;
                     RSOEmergencyBraking = true;
+                    RSOClosedSignal = false;
+                    RSOOpenedSignal = false;
+                    RSOPreviousClosedSignal = false;
                 }
-                else if (RearmingButton)
-                {
-                    RSOEmergencyBraking = false;
-                }
+            }
+            else
+            {
+                SetCabDisplayControl(LS_SF, 0);
+                SetCabDisplayControl(VY_SOS_RSO, 0);
 
-                SetCabDisplayControl(VY_SOS_RSO, RSOEmergencyBraking ? 1 : 0);
-
-                if (RSOClosedSignal && !RSOPreviousClosedSignal && !RSOType1Inhibition)
-                {
-                    TriggerKvbBipSound(0.3f);
-                }
-
-                RSOPreviousClosedSignal = RSOClosedSignal;
-
-                if (TVM300Present || TVM430Present)
-                {
-                    if (TVMClosedSignal && !TVMPreviousClosedSignal)
-                    {
-                        TriggerKvbBipSound(0.3f);
-                    }
-
-                    if (TVMOpenedSignal && !TVMPreviousOpenedSignal)
-                    {
-                        TriggerKvbBipSound(0.3f);
-                    }
-
-                    TVMPreviousClosedSignal = TVMClosedSignal;
-                    TVMPreviousOpenedSignal = TVMOpenedSignal;
-                }
-
-                RSOPreviousPressed = RSOPressed;
-
-                RSOClosedSignal = RSOOpenedSignal = false;
+                RSOEmergencyBraking = false;
             }
         }
 
@@ -3128,34 +3157,46 @@ namespace ORTS.Scripting.Script
         {
             if ((TVM300Present || TVM430Present) && IsSpeedControlEnabled())
             {
-                if (!ARMCAB && TVMArmed && DECAB)
-                {
-                    TVMArmed = false;
-                    TVMMode = TVMModeType.None;
-                    TVMCOVITEmergencyBraking = false;
-                    TVM430AspectChangeTimer.Stop();
-                }
-
-                if (!TVMArmed && TVMManualArming)
-                {
-                    TVMArmed = true;
-                    if (Signals[SignalType.NORMAL].NextSignal.TextAspect.Contains("FR_TVM430"))
-                    {
-                        TVMMode = TVMModeType.TVM430;
-                    }
-                    else if (Signals[SignalType.NORMAL].NextSignal.TextAspect.Contains("FR_TVM300"))
-                    {
-                        TVMMode = TVMModeType.TVM300;
-                    }
-                    ARMCAB = true;
-                }
-                else if (TVMArmed && TVMManualDearming)
+                if (!IsCabPowerSupplyOn())
                 {
                     TVMArmed = false;
                     TVMMode = TVMModeType.None;
                     TVMCOVITEmergencyBraking = false;
                     TVM430AspectChangeTimer.Stop();
                     ARMCAB = false;
+                }
+                else
+                {
+                    if (!ARMCAB && TVMArmed && DECAB)
+                    {
+                        TVMArmed = false;
+                        TVMMode = TVMModeType.None;
+                        TVMCOVITEmergencyBraking = false;
+                        TVM430AspectChangeTimer.Stop();
+                    }
+
+                    if (!TVMArmed && TVMManualArming)
+                    {
+                        TVMArmed = true;
+                        if (Signals[SignalType.NORMAL].NextSignal.TextAspect.Contains("FR_TVM430"))
+                        {
+                            TVMMode = TVMModeType.TVM430;
+                        }
+                        else if (Signals[SignalType.NORMAL].NextSignal.TextAspect.Contains("FR_TVM300"))
+                        {
+                            TVMMode = TVMModeType.TVM300;
+                        }
+
+                        ARMCAB = true;
+                    }
+                    else if (TVMArmed && TVMManualDearming)
+                    {
+                        TVMArmed = false;
+                        TVMMode = TVMModeType.None;
+                        TVMCOVITEmergencyBraking = false;
+                        TVM430AspectChangeTimer.Stop();
+                        ARMCAB = false;
+                    }
                 }
 
                 if (TVMArmed)
@@ -4269,68 +4310,77 @@ namespace ORTS.Scripting.Script
 
         protected void UpdateVACMA()
         {
-            if (VACMAPresent && Activated && IsAlerterEnabled())
+            if (VACMAPresent && IsAlerterEnabled())
             {
-                if (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest)
+                if (IsCabPowerSupplyOn())
                 {
-                    if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                    if (SpeedMpS() >= VACMAActivationSpeedMpS || VACMATest)
+                    {
+                        if (VACMAPressed && (!VACMAPressedAlertTimer.Started || !VACMAPressedEmergencyTimer.Started))
+                        {
+                            VACMAReleasedAlertTimer.Stop();
+                            VACMAReleasedEmergencyTimer.Stop();
+                            VACMAPressedAlertTimer.Start();
+                            VACMAPressedEmergencyTimer.Start();
+                        }
+
+                        if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
+                        {
+                            VACMAReleasedAlertTimer.Start();
+                            VACMAReleasedEmergencyTimer.Start();
+                            VACMAPressedAlertTimer.Stop();
+                            VACMAPressedEmergencyTimer.Stop();
+                        }
+                    }
+                    else
                     {
                         VACMAReleasedAlertTimer.Stop();
                         VACMAReleasedEmergencyTimer.Stop();
-                        VACMAPressedAlertTimer.Start();
-                        VACMAPressedEmergencyTimer.Start();
-                    }
-                    if (!VACMAPressed && (!VACMAReleasedAlertTimer.Started || !VACMAReleasedEmergencyTimer.Started))
-                    {
-                        VACMAReleasedAlertTimer.Start();
-                        VACMAReleasedEmergencyTimer.Start();
                         VACMAPressedAlertTimer.Stop();
                         VACMAPressedEmergencyTimer.Stop();
+                    }
+
+                    if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
+                        TriggerSoundWarning1();
+                    else
+                        TriggerSoundWarning2();
+
+                    if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered)
+                        TriggerSoundAlert1();
+                    else
+                        TriggerSoundAlert2();
+
+                    if (!VACMAEmergencyBraking &&
+                        (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
+                    {
+                        VACMAEmergencyBraking = true;
+                        SetVigilanceEmergencyDisplay(true);
+                    }
+
+                    if (VACMAEmergencyBraking && SpeedMpS() < VACMAActivationSpeedMpS && RearmingButton)
+                    {
+                        VACMAEmergencyBraking = false;
+                        SetVigilanceEmergencyDisplay(false);
                     }
                 }
                 else
                 {
+                    // Reset everything
                     VACMAReleasedAlertTimer.Stop();
                     VACMAReleasedEmergencyTimer.Stop();
                     VACMAPressedAlertTimer.Stop();
                     VACMAPressedEmergencyTimer.Stop();
-                }
-
-                if (VACMAReleasedAlertTimer.Started && VACMAReleasedAlertTimer.Triggered)
-                    TriggerSoundWarning1();
-                else
-                    TriggerSoundWarning2();
-
-                if (VACMAPressedAlertTimer.Started && VACMAPressedAlertTimer.Triggered)
-                    TriggerSoundAlert1();
-                else
-                    TriggerSoundAlert2();
-
-                if (!VACMAEmergencyBraking && (VACMAPressedEmergencyTimer.Triggered || VACMAReleasedEmergencyTimer.Triggered))
-                {
                     VACMAEmergencyBraking = true;
-                    SetVigilanceEmergencyDisplay(true);
-                }
-
-                if (VACMAEmergencyBraking && SpeedMpS() < VACMAActivationSpeedMpS && RearmingButton)
-                {
-                    VACMAEmergencyBraking = false;
                     SetVigilanceEmergencyDisplay(false);
+
+                    TriggerSoundWarning2();
+                    TriggerSoundAlert2();
                 }
             }
             else
             {
-                // Reset everything
-                VACMAReleasedAlertTimer.Stop();
-                VACMAReleasedEmergencyTimer.Stop();
-                VACMAPressedAlertTimer.Stop();
-                VACMAPressedEmergencyTimer.Stop();
                 VACMAEmergencyBraking = false;
                 SetVigilanceEmergencyDisplay(false);
-
-                TriggerSoundWarning2();
-                TriggerSoundAlert2();
-                return;
             }
 
             // VY SOS VAC
