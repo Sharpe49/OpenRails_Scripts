@@ -63,7 +63,6 @@ namespace ORTS.Scripting.Script
         private ControllerPosition CurrentPosition = ControllerPosition.Hold;
 
         private bool FirstDepression = false;
-        private bool Neutral = false;
         private bool Overcharge = false;
         private bool OverchargeElimination = false;
         private bool QuickRelease = false;
@@ -140,6 +139,8 @@ namespace ORTS.Scripting.Script
                     break;
             }
 
+            NeutralModeOn = NeutralModeCommandSwitchOn || EmergencyBrakingPushButton() || TCSEmergencyBraking();
+
             return CurrentValue();
         }
 
@@ -175,10 +176,10 @@ namespace ORTS.Scripting.Script
                 CurrentState = State.OverchargeElimination;
             else if (Overcharge && pressureBar <= RegulatorPressureBar + OverchargePressureBar)
                 CurrentState = State.Overcharge;
-            else if (QuickRelease && !Neutral && pressureBar < RegulatorPressureBar)
+            else if (QuickRelease && !NeutralModeOn && pressureBar < RegulatorPressureBar)
                 CurrentState = State.QuickRelease;
             else if (
-                !Neutral && (
+                !NeutralModeOn && (
                     CurrentPosition == ControllerPosition.Release && pressureBar < RegulatorPressureBar
                     || !FirstDepression && pressureBar > RegulatorPressureBar - BrakeReleasedDepressureBar && pressureBar < RegulatorPressureBar
                     || pressureBar < RegulatorPressureBar - FullServReductionBar()
