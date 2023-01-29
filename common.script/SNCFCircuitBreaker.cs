@@ -15,10 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Rails.  If not, see <http://www.gnu.org/licenses/>.
 
+using System.Globalization;
+using System.Net;
 using Orts.Common;
+using ORTS.Common;
 using Orts.Simulation;
 using ORTS.Scripting.Api;
-using System.Globalization;
 
 namespace ORTS.Scripting.Script
 {
@@ -28,27 +30,75 @@ namespace ORTS.Scripting.Script
         private Timer ClosingTimer;
         private CircuitBreakerState PreviousState;
 
+        private Timer InitTimer;
+        private bool Init = true;
+        private bool Authorization = false;
+        private bool TCSOpening = false;
+
         public override void Initialize()
         {
             ClosingTimer = new Timer(this);
             ClosingTimer.Setup(ClosingDelayS());
+
+            InitTimer = new Timer(this);
+            InitTimer.Setup(5f);
+
+            if (ServiceRetentionActive)
+            {
+                SetCurrentState(CircuitBreakerState.Closed);
+            }
+            else
+            {
+                Init = false;
+            }
         }
 
         public override void Update(float elapsedSeconds)
         {
-            SetClosingAuthorization(TCSClosingAuthorization() && DriverClosingAuthorization() && CurrentPantographState() == PantographState.Up);
+            if (Init)
+            {
+                if (!InitTimer.Started)
+                {
+                    InitTimer.Start();
+                    SignalEvent(Event.CircuitBreakerClosed);
+                }
+
+                if (InitTimer.Triggered)
+                {
+                    InitTimer.Stop();
+                    Init = false;
+                }
+
+                return;
+            }
+
+            Authorization = TCSClosingAuthorization() && DriverClosingAuthorization() && CurrentPantographState() == PantographState.Up;
+
+            if (TCSOpeningOrder())
+            {
+                TCSOpening = true;
+            }
+            else if (CurrentState() == CircuitBreakerState.Closed)
+            {
+                TCSOpening = false;
+            }
+
+            SetClosingAuthorization(CurrentPantographState() == PantographState.Up && SpeedMpS() < MpS.FromKpH(3f)); // Arbitrary voltage value
+
 
             switch (CurrentState())
             {
                 case CircuitBreakerState.Closed:
-                    if (!ClosingAuthorization())
+                    if (!Authorization && !ServiceRetentionActive
+                        || TCSOpeningOrder()
+                        || CurrentPantographState() != PantographState.Up)
                     {
                         SetCurrentState(CircuitBreakerState.Open);
                     }
                     break;
 
                 case CircuitBreakerState.Closing:
-                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
+                    if (Authorization && (DriverClosingOrder() || TCSClosingOrder()))
                     {
                         if (!ClosingTimer.Started)
                         {
@@ -69,7 +119,7 @@ namespace ORTS.Scripting.Script
                     break;
 
                 case CircuitBreakerState.Open:
-                    if (ClosingAuthorization() && (DriverClosingOrder() || TCSClosingOrder()))
+                    if (Authorization && (DriverClosingOrder() || TCSClosingOrder()))
                     {
                         SetCurrentState(CircuitBreakerState.Closing);
                     }

@@ -1011,13 +1011,10 @@ namespace ORTS.Scripting.Script
 
                 SetPenaltyApplicationDisplay(IsBrakeEmergency());
 
-                SetPowerAuthorization(!EmergencyBraking && !TVMOpenCircuitBreakerOrder);
+                SetPowerAuthorization(!EmergencyBraking);
                 SetMaxThrottlePercent(TVMTractionReductionOrder ? TVMTractionReductionMaxThrottlePercent : 100f);
+                SetCircuitBreakerOpeningOrder(TVMOpenCircuitBreakerOrder);
                 SetCircuitBreakerClosingOrder(TVMCloseCircuitBreakerOrder);
-                if (TVMLowerPantographOrder)
-                {
-                    SetPantographsDown();
-                }
 
                 RSOType1Inhibition = IsDirectionReverse();
                 RSOType2Inhibition = !KVBInhibited && ((TVM300Present || TVM430Present) && TVMArmed);
@@ -3307,8 +3304,12 @@ namespace ORTS.Scripting.Script
                             TVMLowerPantographEndOdometer.Start();
                             TVMLowerPantograph = true;
                         }
-                        else if (lastSignalAspect.Contains("BSP_EBP"))
+                        else if (lastSignalAspect.Exists(x => x.StartsWith("BSP_EL") || x == "BSP_EET"))
                         {
+                            string message = lastSignalAspect.Find(x => x.StartsWith("BSP_EL") || x == "BSP_EET").Substring(4);
+
+                            SignalEventToPowerSupply(PowerSupplyEvent.LowerPantograph, message);
+
                             TVMLowerPantographStartOdometer.Setup(0f);
                             TVMLowerPantographStartOdometer.Start();
                             TVMLowerPantographEndOdometer.Setup(180f + TrainLengthM() + 25f);
@@ -3669,13 +3670,23 @@ namespace ORTS.Scripting.Script
                 if (CurrentDirection() == Direction.Reverse
                     || (SpeedKpH() <= 30f && ArePantographsDown()))
                 {
+                    if (TVMLowerPantographOrder)
+                    {
+                        SignalEventToPowerSupply(PowerSupplyEvent.RaisePantograph);
+                        TVMLowerPantographOrder = false;
+                    }
+
                     TVMOpenCircuitBreakerOrder = false;
-                    TVMLowerPantographOrder = false;
                 }
                 else if (TVMLowerPantographStartOdometer.Triggered)
                 {
+                    if (!TVMLowerPantographOrder)
+                    {
+                        SignalEventToPowerSupply(PowerSupplyEvent.LowerPantograph);
+                        TVMLowerPantographOrder = true;
+                    }
+
                     TVMOpenCircuitBreakerOrder = true;
-                    TVMLowerPantographOrder = true;
                 }
 
                 if (TVMLowerPantographEndOdometer.Triggered)
@@ -3684,8 +3695,13 @@ namespace ORTS.Scripting.Script
                     TVMLowerPantographEndOdometer.Stop();
                     TVMLowerPantograph = false;
 
+                    if (TVMLowerPantographOrder)
+                    {
+                        SignalEventToPowerSupply(PowerSupplyEvent.RaisePantograph);
+                        TVMLowerPantographOrder = false;
+                    }
+
                     TVMOpenCircuitBreakerOrder = false;
-                    TVMLowerPantographOrder = false;
                 }
             }
         }
