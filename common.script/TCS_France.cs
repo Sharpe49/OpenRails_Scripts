@@ -1038,6 +1038,7 @@ namespace ORTS.Scripting.Script
             RSOEmergencyBraking = false;
             KVBCLTV = true;
             KVBCTABP = true;
+            KVBParametersValidation = true;
             KVBState = KVBStateType.Normal;
             KVBEmergencyBraking = false;
             VACMAEmergencyBraking = false;
