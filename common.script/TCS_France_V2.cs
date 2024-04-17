@@ -94,6 +94,7 @@ namespace ORTS.Scripting.Script
             SPEED,
             TABP,
             TIVD,
+            TIVE,
             TIVR,
             BP_ANN,
             BP_EXE,
@@ -102,6 +103,8 @@ namespace ORTS.Scripting.Script
             CCT_EXE,
             CCT_FP,
             KVB,
+            KVB_DVL,
+            KVB_FVL,
             TVM300_EPI,
             TVM430_BSP,
             SPEEDPOST,
@@ -500,10 +503,12 @@ namespace ORTS.Scripting.Script
         OdoMeter KVBSignalTargetOdometer;
 
         KVBSpeedPostSpeedType KVBSpeedPostExecutionTIVE = KVBSpeedPostSpeedType.None;
+        KVBSpeedPostSpeedType KVBSpeedPostExecutionLTV = KVBSpeedPostSpeedType.None;
         KVBSpeedPostSpeedType KVBSpeedPostExecutionDVL = KVBSpeedPostSpeedType.None;
         List<(KVBSpeedPostSpeedType Speed, OdoMeter Odometer)> KVBSpeedPostPendingList = new List<(KVBSpeedPostSpeedType Speed, OdoMeter Odometer)>();
         List<(KVBSpeedPostSpeedCategory Category, KVBSpeedPostSpeedType Speed, OdoMeter Odometer)> KVBSpeedPostAnnounceList = new List<(KVBSpeedPostSpeedCategory Category, KVBSpeedPostSpeedType Speed, OdoMeter Odometer)>();
-        OdoMeter KVBTrainLengthOdometerFVL;
+        private OdoMeter KVBTrainLengthOdometerFLTV;
+        private OdoMeter KVBTrainLengthOdometerFVL;
 
         float KVBDeclivity = 0f;                            // i
 
@@ -762,6 +767,7 @@ namespace ORTS.Scripting.Script
             KVBSignalTargetOdometer = new OdoMeter(this);
             KVBPreAnnounceOdometerVLCLI = new OdoMeter(this);
             KVBTrainLengthOdometerVLCLI = new OdoMeter(this);
+            KVBTrainLengthOdometerFLTV = new OdoMeter(this);
             KVBTrainLengthOdometerFVL = new OdoMeter(this);
 
             KVBGroundFailureTimer.Setup(10f);
@@ -1428,6 +1434,7 @@ namespace ORTS.Scripting.Script
             KVBTrainLengthM = KVBMode == KVBModeType.Shunting || !KVBParametersValidation ? 800f : (float)Math.Ceiling((double)(TrainLengthM() / 100f)) * 100f;
             KVBTrainLengthOdometer.Setup(KVBTrainLengthM);
             KVBTrainLengthOdometerVLCLI.Setup(KVBTrainLengthM);
+            KVBTrainLengthOdometerFLTV.Setup(KVBTrainLengthM);
             KVBTrainLengthOdometerFVL.Setup(KVBTrainLengthM);
 
             if (ElectroPneumaticBrake)
@@ -1661,22 +1668,43 @@ namespace ORTS.Scripting.Script
                             KVBSpeedPostSpeedCategory category = KVBSpeedPostSpeedCategory.G;
                             KVBSpeedPostSpeedType speed = KVBSpeedPostSpeedType.None;
 
-                            // TIVD in NORMAL signal (used by Swiss signals)
+                            // TIVD in NORMAL signal (used by Swiss signals) or TSR
                             if (part.StartsWith("KVB_TIVD_"))
                             {
                                 category = (KVBSpeedPostSpeedCategory)Enum.Parse(typeof(KVBSpeedPostSpeedCategory), part.Split('_')[2]);
                                 speed = (KVBSpeedPostSpeedType)Enum.Parse(typeof(KVBSpeedPostSpeedType), part.Split('_')[3]);
 
-                                SignalFeatures normalSignal = FindNextSignalWithTextAspect($"KVB_TIVE_{category}_{speed}", SignalType.NORMAL, 5, 3000f);
-
-                                // If signal found
-                                if (normalSignal.DistanceM <= 3000f)
+                                if (category != KVBSpeedPostSpeedCategory.LTV)
                                 {
-                                    OdoMeter odometer = new OdoMeter(this);
-                                    odometer.Setup(normalSignal.DistanceM);
-                                    odometer.Start();
+                                    SignalFeatures normalSignal =
+                                        FindNextSignalWithTextAspect($"KVB_TIVE_{category}_{speed}", SignalType.NORMAL,
+                                            5, 3000f);
 
-                                    KVBSpeedPostAnnounceList.Add((category, speed, odometer));
+                                    // If signal found
+                                    if (normalSignal.DistanceM <= 3000f)
+                                    {
+                                        OdoMeter odometer = new OdoMeter(this);
+                                        odometer.Setup(normalSignal.DistanceM);
+                                        odometer.Start();
+
+                                        KVBSpeedPostAnnounceList.Add((category, speed, odometer));
+                                    }
+                                }
+                                else
+                                {
+                                    SignalFeatures normalSignal =
+                                        FindNextSignalWithTextAspect($"KVB_TIVE_LTV_{speed}", SignalType.TIVE,
+                                            5, 4400f);
+
+                                    // If signal found
+                                    if (normalSignal.DistanceM <= 4400f)
+                                    {
+                                        OdoMeter odometer = new OdoMeter(this);
+                                        odometer.Setup(normalSignal.DistanceM);
+                                        odometer.Start();
+
+                                        KVBSpeedPostAnnounceList.Add((category, speed, odometer));
+                                    }
                                 }
                             }
                             else if (part.StartsWith("KVB_TIVE_"))
@@ -1686,7 +1714,14 @@ namespace ORTS.Scripting.Script
 
                                 if (speed != KVBSpeedPostSpeedType.AA)
                                 {
-                                    KVBSpeedPostExecutionTIVE = speed;
+                                    if (category != KVBSpeedPostSpeedCategory.LTV)
+                                    {
+                                        KVBSpeedPostExecutionTIVE = speed;
+                                    }
+                                    else
+                                    {
+                                        KVBSpeedPostExecutionLTV = speed;
+                                    }
 
                                     KVBSpeedPostAnnounceList.RemoveAll(x => x.Category == category && x.Speed == speed);
                                 }
@@ -1839,6 +1874,8 @@ namespace ORTS.Scripting.Script
                         break;
 
                     case SignalType.KVB:
+                    case SignalType.KVB_DVL:
+                    case SignalType.KVB_FVL:
                         if (lastSignalAspect.Contains("KVB_DGV"))
                         {
                             QBal = QBalType.LGV;
@@ -1861,6 +1898,15 @@ namespace ORTS.Scripting.Script
                             {
                                 KVBTrainLengthOdometerFVL.Start();
                             }
+                        }
+                        else if (lastSignalAspect.Contains("KVB_FLTV"))
+                        {
+                            if (KVBSpeedPostExecutionLTV != KVBSpeedPostSpeedType.None)
+                            {
+                                KVBTrainLengthOdometerFLTV.Start();
+                            }
+
+                            KVBCLTV = true;
                         }
                         else if (lastSignalAspect.Contains("KVB_FZ"))
                         {
@@ -2020,6 +2066,18 @@ namespace ORTS.Scripting.Script
                     }
                 }
             }
+
+            if (KVBSpeedPostExecutionLTV != KVBSpeedPostSpeedType.None)
+            {
+                if (KVBTrainLengthOdometerFLTV.Started)
+                {
+                    if (KVBTrainLengthOdometerFLTV.Triggered)
+                    {
+                        KVBSpeedPostExecutionLTV = KVBSpeedPostSpeedType.None;
+                        KVBTrainLengthOdometerFLTV.Stop();
+                    }
+                }
+            }
         }
 
         protected void UpdateKvbProx()
@@ -2078,7 +2136,7 @@ namespace ORTS.Scripting.Script
                     case KVBPreAnnounceType.Deactivated:
                         if (KVBCLTV
                             && KVBCTABP
-                            && Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), KvbSpeedToSpeed(KVBSpeedPostExecutionDVL)) > MpS.FromKpH(160f)
+                            && Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionDVL), KvbSpeedToSpeed(KVBSpeedPostExecutionLTV))) > MpS.FromKpH(160f)
                             && (KVBSpeedPostAnnounceList.Select(x => (float?)KvbSpeedToSpeed(x.Speed)).Min() ?? MpS.FromKpH(220f)) > MpS.FromKpH(160f))
                         {
                             KVBPreAnnounceTABP = KVBPreAnnounceType.Armed;
@@ -2086,7 +2144,7 @@ namespace ORTS.Scripting.Script
                         break;
 
                     case KVBPreAnnounceType.Armed:
-                        if (KVBSpeedPostAnnounceList.Exists(x => x.Category == KVBSpeedPostSpeedCategory.GS1 && x.Speed == KVBSpeedPostSpeedType.P))
+                        if (KVBSpeedPostAnnounceList.Exists(x => (x.Category == KVBSpeedPostSpeedCategory.GS1 || x.Category == KVBSpeedPostSpeedCategory.LTV) && x.Speed == KVBSpeedPostSpeedType.P))
                         {
                             KVBPreAnnounceTABP = KVBPreAnnounceType.Triggered;
                             if (KVBPrincipalDisplayState == KVBPrincipalDisplayStateType.b)
@@ -2097,14 +2155,14 @@ namespace ORTS.Scripting.Script
                         break;
 
                     case KVBPreAnnounceType.Triggered:
-                        if (Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), KvbSpeedToSpeed(KVBSpeedPostExecutionDVL)) <= MpS.FromKpH(160f)
+                        if (Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionDVL), KvbSpeedToSpeed(KVBSpeedPostExecutionLTV))) <= MpS.FromKpH(160f)
                             || (KVBSpeedPostAnnounceList
                             .Where(x => x.Speed != KVBSpeedPostSpeedType.P)
                             .Select(x => (float?)KvbSpeedToSpeed(x.Speed)).Min() ?? MpS.FromKpH(220f)) <= MpS.FromKpH(160f))
                         {
                             KVBPreAnnounceTABP = KVBPreAnnounceType.Deactivated;
                         }
-                        else if (Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), KvbSpeedToSpeed(KVBSpeedPostExecutionDVL)) > MpS.FromKpH(160f)
+                        else if (Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionDVL), KvbSpeedToSpeed(KVBSpeedPostExecutionLTV))) > MpS.FromKpH(160f)
                             && (KVBSpeedPostAnnounceList.Select(x => (float?)KvbSpeedToSpeed(x.Speed)).Min() ?? MpS.FromKpH(220f)) > MpS.FromKpH(160f))
                         {
                             KVBPreAnnounceTABP = KVBPreAnnounceType.Armed;
@@ -2284,7 +2342,7 @@ namespace ORTS.Scripting.Script
             emergency |= KVBSignalTargetSpeedEmergency || KVBSignalExecutionSpeedEmergency;
 
             // Speed post execution speed
-            float speedPostExecutionSpeedMpS = Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), KvbSpeedToSpeed(KVBSpeedPostExecutionDVL));
+            float speedPostExecutionSpeedMpS = Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionTIVE), Math.Min(KvbSpeedToSpeed(KVBSpeedPostExecutionDVL), KvbSpeedToSpeed(KVBSpeedPostExecutionLTV)));
             KVBSpeedPostExecutionSpeedAlert = SpeedMpS() > speedPostExecutionSpeedMpS + MpS.FromKpH(5f);
             KVBSpeedPostExecutionSpeedEmergency = SpeedMpS() > speedPostExecutionSpeedMpS + MpS.FromKpH(10f);
 
@@ -2509,9 +2567,25 @@ namespace ORTS.Scripting.Script
                         }
                         else if (ARMCAB)
                         {
-                            KVBPrincipalDisplayState = KVBPrincipalDisplayStateType.Empty;
-                            KVBPrincipalDisplayBlinking = false;
-                            KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.Empty;
+                            if (KVBSpeedPostAnnounceList.Exists(x =>
+                                         x.Category == KVBSpeedPostSpeedCategory.LTV && x.Speed != KVBSpeedPostSpeedType.P))
+                            {
+                                KVBPrincipalDisplayState = KVBSpeedPostAnnounceSpeedAlert ? KVBPrincipalDisplayStateType.L : KVBPrincipalDisplayStateType.Empty;
+                                KVBPrincipalDisplayBlinking = KVBSpeedPostAnnounceSpeedAlert;
+                                KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.L;
+                            }
+                            else if (KVBSpeedPostExecutionLTV != KVBSpeedPostSpeedType.None)
+                            {
+                                KVBPrincipalDisplayState = KVBPrincipalDisplayStateType.L;
+                                KVBPrincipalDisplayBlinking = KVBSpeedPostAnnounceSpeedAlert;
+                                KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.Empty;
+                            }
+                            else
+                            {
+                                KVBPrincipalDisplayState = KVBPrincipalDisplayStateType.Empty;
+                                KVBPrincipalDisplayBlinking = false;
+                                KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.Empty;
+                            }
                         }
                         else if (KVBOnSight)
                         {
@@ -2556,6 +2630,19 @@ namespace ORTS.Scripting.Script
                             {
                                 KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.V00;
                             }
+                        }
+                        else if (KVBSpeedPostAnnounceList.Exists(x =>
+                                x.Category == KVBSpeedPostSpeedCategory.LTV && x.Speed != KVBSpeedPostSpeedType.P))
+                        {
+                            KVBPrincipalDisplayState = KVBSpeedPostAnnounceSpeedAlert ? KVBPrincipalDisplayStateType.L : KVBPrincipalDisplayStateType.Empty;
+                            KVBPrincipalDisplayBlinking = KVBSpeedPostAnnounceSpeedAlert;
+                            KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.L;
+                        }
+                        else if (KVBSpeedPostExecutionLTV != KVBSpeedPostSpeedType.None)
+                        {
+                            KVBPrincipalDisplayState = KVBPrincipalDisplayStateType.L;
+                            KVBPrincipalDisplayBlinking = KVBSpeedPostAnnounceSpeedAlert;
+                            KVBAuxiliaryDisplayState = KVBAuxiliaryDisplayStateType.Empty;
                         }
                         else if (!KVBCLTV
                             || KVBSpeedPostExecutionTIVE == KVBSpeedPostSpeedType.None
@@ -3084,6 +3171,7 @@ namespace ORTS.Scripting.Script
             }
 
             KVBTrainLengthOdometerVLCLI.Stop();
+            KVBTrainLengthOdometerFLTV.Stop();
             KVBTrainLengthOdometerFVL.Stop();
 
             KVBSignalField = KVBSignalFieldType.Unknown;
@@ -3099,6 +3187,7 @@ namespace ORTS.Scripting.Script
             KVBSpeedPostAnnounceList.Clear();
             KVBSpeedPostPendingList.Clear();
             KVBSpeedPostExecutionTIVE = KVBSpeedPostSpeedType.None;
+            KVBSpeedPostExecutionLTV = KVBSpeedPostSpeedType.None;
             KVBSpeedPostExecutionDVL = KVBSpeedPostSpeedType.None;
 
             KVBTrainSpeedLimitAlert = false;
